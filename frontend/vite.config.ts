@@ -12,9 +12,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      allowedHosts: [
-        'sb-5bzpykurm4n3.vercel.run'
-      ],
+      allowedHosts: ['.vercel.run'],
       host: true,
       port: 5173,
       proxy: {
