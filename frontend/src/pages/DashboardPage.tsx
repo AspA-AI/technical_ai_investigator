@@ -7,10 +7,20 @@ import { SensorLogUpload } from "../components/upload/SensorLogUpload";
 import type { InvestigationRun } from "../types/investigation";
 import type { ReportFormat } from "../lib/api/report";
 
-function statusPill(status: string) {
-  if (status === "ok") return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25";
-  if (status === "warning") return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/25";
-  return "bg-slate-700/70 text-slate-200 ring-1 ring-slate-600/70";
+function StatusIndicator({ status }: { status: string }) {
+  const isOnline = status === "ok";
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`h-2 w-2 rounded-full ${
+          isOnline ? "bg-[hsl(var(--primary))] shadow-[0_0_8px_hsl(var(--primary))]" : "bg-amber-500"
+        }`}
+      />
+      <span className="text-sm capitalize text-[hsl(var(--muted-foreground))]">
+        {status === "loading" ? "Checking..." : status}
+      </span>
+    </div>
+  );
 }
 
 export function DashboardPage() {
@@ -33,33 +43,33 @@ export function DashboardPage() {
       } catch {
         setBackendHealth("offline");
       }
-    }
 
-    bootstrap();
+      if (typeof window !== "undefined") {
+        let sid = window.localStorage.getItem("investigation_copilot_session_id");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          window.localStorage.setItem("investigation_copilot_session_id", sid);
+        }
+        setSessionId(sid);
 
-    if (typeof window !== "undefined") {
-      let sid = window.localStorage.getItem("investigation_copilot_session_id");
-      if (!sid) {
-        sid = crypto.randomUUID();
-        window.localStorage.setItem("investigation_copilot_session_id", sid);
-      }
-      setSessionId(sid);
+        const savedUploadId = window.localStorage.getItem("investigation_copilot_last_upload_id");
+        if (savedUploadId) setUploadId(savedUploadId);
 
-      const savedUploadId = window.localStorage.getItem("investigation_copilot_last_upload_id");
-      if (savedUploadId) setUploadId(savedUploadId);
-
-      const savedInvestigationId = window.localStorage.getItem("investigation_copilot_last_investigation_id");
-      if (savedInvestigationId) {
-        const id = Number(savedInvestigationId);
-        setInvestigationId(id);
-        try {
-          const loaded = await getInvestigation(id);
-          setInvestigation(loaded);
-        } catch {
-          // ignore load errors on initial restore
+        const savedInvestigationId = window.localStorage.getItem("investigation_copilot_last_investigation_id");
+        if (savedInvestigationId) {
+          const id = Number(savedInvestigationId);
+          setInvestigationId(id);
+          try {
+            const loaded = await getInvestigation(id);
+            setInvestigation(loaded);
+          } catch {
+            // ignore load errors on initial restore
+          }
         }
       }
     }
+
+    bootstrap();
   }, []);
 
   const clearNotifications = () => {
@@ -132,131 +142,236 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/20 backdrop-blur-xl">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-4">
-            <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">Engineering Investigation Workspace</p>
-            <h1 className="text-4xl font-semibold tracking-tight text-white">Upload and investigate from one dashboard.</h1>
-            <p className="max-w-2xl text-slate-400">No login required. Your browser session links upload, investigation, and chat history.</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className={`rounded-3xl border p-4 text-sm font-medium ${statusPill(backendHealth)}`}>
-              <div className="text-slate-300">Backend health</div>
-              <div className="mt-2 text-xl text-white">{backendHealth}</div>
-            </div>
-            <div className="rounded-3xl border border-slate-700/80 bg-slate-950/80 p-4 break-words">
-              <div className="text-slate-400">Session ID</div>
-              <div className="mt-2 text-sm text-slate-200">{sessionId || "Generating..."}</div>
-            </div>
-          </div>
+      {/* Header Section */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[hsl(var(--foreground))]">Dashboard</h1>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+            Upload sensor data, run investigations, and chat with your findings.
+          </p>
         </div>
-      </section>
+        <div className="flex items-center gap-4">
+          <StatusIndicator status={backendHealth} />
+          <div className="h-4 w-px bg-[hsl(var(--border))]" />
+          <span className="max-w-[140px] truncate text-xs text-[hsl(var(--muted-foreground))]" title={sessionId}>
+            Session: {sessionId.slice(0, 8)}...
+          </span>
+        </div>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      {/* Notification Alerts */}
+      {message && (
+        <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--primary))/0.3] bg-[hsl(var(--primary))/0.1] px-4 py-3">
+          <svg className="h-4 w-4 text-[hsl(var(--primary))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="text-sm text-[hsl(var(--primary))]">{message}</span>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--destructive))/0.3] bg-[hsl(var(--destructive))/0.1] px-4 py-3">
+          <svg className="h-4 w-4 text-[hsl(var(--destructive))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span className="text-sm text-[hsl(var(--destructive))]">{error}</span>
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        {/* Left Column */}
         <div className="space-y-6">
-          <section className="rounded-[1.75rem] border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/15">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Upload & investigate</h2>
-                <p className="text-sm text-slate-500">Upload your data and run the investigation automatically.</p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_0.95fr]">
-              <div className="rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60">
-                <p className="text-sm text-slate-400">Sensor log upload</p>
-                <SensorLogUpload onUploadComplete={handleUploadComplete} />
-                {uploadMessage && <p className="mt-4 text-sm text-slate-300">{uploadMessage}</p>}
-              </div>
-
-              <div className="rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60">
-                <p className="text-sm text-slate-400">Investigation progress</p>
-                <div className="mt-4 rounded-3xl bg-slate-900/80 p-4 text-sm text-slate-200 ring-1 ring-slate-700/60">
-                  <p>{working ? "Investigation running..." : "Ready"}</p>
-                  {investigationId && <p className="mt-2 text-slate-400">Investigation #{investigationId}</p>}
-                  {uploadId && <p className="mt-2 text-slate-400">Upload #{uploadId}</p>}
+          {/* Upload Card */}
+          <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+            <div className="border-b border-[hsl(var(--border))] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--secondary))]">
+                  <svg className="h-4 w-4 text-[hsl(var(--foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Report download</p>
-                  <p className="mt-1 text-xs text-slate-500">Generate PDF or PPTX for the current investigation.</p>
+                  <h2 className="text-sm font-medium text-[hsl(var(--foreground))]">Upload & Investigate</h2>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Upload sensor logs to start analysis</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadReport}
-                  className="rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                >
-                  Download
-                </button>
               </div>
+            </div>
+            <div className="p-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                  <p className="mb-3 text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    Sensor Log Upload
+                  </p>
+                  <SensorLogUpload onUploadComplete={handleUploadComplete} />
+                  {uploadMessage && (
+                    <p className="mt-3 text-xs text-[hsl(var(--primary))]">{uploadMessage}</p>
+                  )}
+                </div>
+                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                  <p className="mb-3 text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    Investigation Progress
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {working ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
+                        <span className="text-sm text-[hsl(var(--foreground))]">Running...</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="h-2 w-2 rounded-full bg-[hsl(var(--muted-foreground))]" />
+                        <span className="text-sm text-[hsl(var(--muted-foreground))]">Ready</span>
+                      </>
+                    )}
+                  </div>
+                  {investigationId && (
+                    <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+                      Investigation #{investigationId}
+                    </p>
+                  )}
+                  {uploadId && (
+                    <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                      Upload: {uploadId.slice(0, 12)}...
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+          {/* Report Card */}
+          <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+            <div className="border-b border-[hsl(var(--border))] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--secondary))]">
+                  <svg className="h-4 w-4 text-[hsl(var(--foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-medium text-[hsl(var(--foreground))]">Report Download</h2>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Generate PDF or PPTX reports</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-5">
+              <div className="flex gap-2">
                 {(["pdf", "pptx"] as ReportFormat[]).map((format) => (
                   <button
                     key={format}
                     type="button"
                     onClick={() => setReportFormat(format)}
-                    className={`rounded-2xl px-3 py-2 text-sm font-medium transition ${reportFormat === format ? "bg-cyan-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${
+                      reportFormat === format
+                        ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                        : "border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]"
+                    }`}
                   >
-                    {format.toUpperCase()}
+                    {format}
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                className="inline-flex items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-[hsl(var(--background))] transition-opacity hover:opacity-90"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download
+              </button>
             </div>
+          </div>
 
-            {message && <div className="mt-5 rounded-3xl bg-emerald-500/10 p-4 text-sm text-emerald-200 ring-1 ring-emerald-500/30">{message}</div>}
-            {error && <div className="mt-5 rounded-3xl bg-rose-500/10 p-4 text-sm text-rose-200 ring-1 ring-rose-500/30">{error}</div>}
-          </section>
-
-          <section className="rounded-[1.75rem] border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/15">
-            <h2 className="text-xl font-semibold text-white">Investigation findings</h2>
-            <p className="mt-2 text-sm text-slate-500">Current investigation summary and key metadata.</p>
-
-            {investigation ? (
-              <div className="mt-6 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-3xl bg-slate-950/70 p-4 ring-1 ring-slate-700/60">
-                    <p className="text-sm text-slate-400">Status</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{investigation.status}</p>
-                  </div>
-                  <div className="rounded-3xl bg-slate-950/70 p-4 ring-1 ring-slate-700/60">
-                    <p className="text-sm text-slate-400">Upload ID</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{investigation.upload_id}</p>
-                  </div>
+          {/* Findings Card */}
+          <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+            <div className="border-b border-[hsl(var(--border))] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--secondary))]">
+                  <svg className="h-4 w-4 text-[hsl(var(--foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
                 </div>
-
-                <div className="rounded-3xl bg-slate-950/70 p-4 ring-1 ring-slate-700/60">
-                  <p className="text-sm text-slate-400">Summary</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-200">{investigation.state.summary || "No summary available yet."}</p>
+                <div>
+                  <h2 className="text-sm font-medium text-[hsl(var(--foreground))]">Investigation Findings</h2>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Current investigation summary</p>
                 </div>
               </div>
-            ) : (
-              <div className="mt-6 rounded-3xl bg-slate-950/70 p-6 text-sm text-slate-400 ring-1 ring-slate-700/60">
-                No investigation loaded yet. Upload a CSV to start.
-              </div>
-            )}
-          </section>
+            </div>
+            <div className="p-5">
+              {investigation ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                        Status
+                      </p>
+                      <p className="mt-2 text-lg font-semibold capitalize text-[hsl(var(--foreground))]">
+                        {investigation.status}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                        Upload ID
+                      </p>
+                      <p className="mt-2 truncate text-lg font-semibold text-[hsl(var(--foreground))]">
+                        {investigation.upload_id}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      Summary
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-[hsl(var(--foreground))]">
+                      {investigation.state.summary || "No summary available yet."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--secondary))]">
+                    <svg className="h-6 w-6 text-[hsl(var(--muted-foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    No investigation loaded yet
+                  </p>
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                    Upload a CSV file to start
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <aside className="space-y-6">
-          <section className="sticky top-6 rounded-[1.75rem] border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/15 min-h-[calc(100vh-96px)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Engineering chat</h2>
-                <p className="mt-2 text-sm text-slate-500">Ask questions about the investigation and keep your session history.</p>
+        {/* Right Column - Chat */}
+        <div className="lg:sticky lg:top-20 lg:h-[calc(100vh-112px)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--primary))]">
+                  <svg className="h-4 w-4 text-[hsl(var(--primary-foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-medium text-[hsl(var(--foreground))]">Engineering Chat</h2>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Ask questions about findings</p>
+                </div>
               </div>
-              <div className="rounded-full bg-slate-950/70 px-3 py-2 text-xs uppercase tracking-[0.35em] text-slate-300">Chat</div>
+              <span className="rounded-full bg-[hsl(var(--secondary))] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                AI
+              </span>
             </div>
-
-            <div className="mt-6">
+            <div className="flex-1 overflow-hidden">
               <InvestigationChat investigationId={investigationId ?? 0} sessionId={sessionId} />
             </div>
-          </section>
-        </aside>
+          </div>
+        </div>
       </div>
     </div>
   );
