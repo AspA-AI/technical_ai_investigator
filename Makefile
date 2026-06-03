@@ -10,7 +10,7 @@ FRONTEND_PORT ?= 5173
 
 .PHONY: help setup env install install-backend install-frontend \
 	up up-d down down-v restart build rebuild logs logs-api logs-frontend logs-db ps \
-	dev dev-local dev-api dev-frontend clean test-api
+	dev dev-local dev-api dev-frontend mcp clean test-api
 
 help:
 	@echo "Engineering Failure Investigation Copilot"
@@ -114,6 +114,10 @@ dev-api: env install-backend
 
 dev-frontend: install-frontend
 	cd frontend && npm run dev -- --host 0.0.0.0 --port $(FRONTEND_PORT)
+
+# Run the MCP server over stdio (Phase 7) — exposes the investigation tools via MCP
+mcp: install-backend
+	cd backend && PYTHONPATH=. $(CURDIR)/$(VENV_BIN)/python -m mcp_server
 
 # Alias: Docker is the primary "dev" experience from root
 dev: up-d

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_db
 from api.schemas.mcp import ToolInvokeRequest, ToolInvokeResponse, ToolListResponse
-from mcp.server import invoke_mcp_tool, list_mcp_tools, MCPToolNotFoundError
+from mcp_registry.server import invoke_mcp_tool, list_mcp_tools, MCPToolNotFoundError
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
