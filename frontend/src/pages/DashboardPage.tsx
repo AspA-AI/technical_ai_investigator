@@ -33,33 +33,33 @@ export function DashboardPage() {
       } catch {
         setBackendHealth("offline");
       }
-    }
 
-    bootstrap();
+      if (typeof window !== "undefined") {
+        let sid = window.localStorage.getItem("investigation_copilot_session_id");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          window.localStorage.setItem("investigation_copilot_session_id", sid);
+        }
+        setSessionId(sid);
 
-    if (typeof window !== "undefined") {
-      let sid = window.localStorage.getItem("investigation_copilot_session_id");
-      if (!sid) {
-        sid = crypto.randomUUID();
-        window.localStorage.setItem("investigation_copilot_session_id", sid);
-      }
-      setSessionId(sid);
+        const savedUploadId = window.localStorage.getItem("investigation_copilot_last_upload_id");
+        if (savedUploadId) setUploadId(savedUploadId);
 
-      const savedUploadId = window.localStorage.getItem("investigation_copilot_last_upload_id");
-      if (savedUploadId) setUploadId(savedUploadId);
-
-      const savedInvestigationId = window.localStorage.getItem("investigation_copilot_last_investigation_id");
-      if (savedInvestigationId) {
-        const id = Number(savedInvestigationId);
-        setInvestigationId(id);
-        try {
-          const loaded = await getInvestigation(id);
-          setInvestigation(loaded);
-        } catch {
-          // ignore load errors on initial restore
+        const savedInvestigationId = window.localStorage.getItem("investigation_copilot_last_investigation_id");
+        if (savedInvestigationId) {
+          const id = Number(savedInvestigationId);
+          setInvestigationId(id);
+          try {
+            const loaded = await getInvestigation(id);
+            setInvestigation(loaded);
+          } catch {
+            // ignore load errors on initial restore
+          }
         }
       }
     }
+
+    bootstrap();
   }, []);
 
   const clearNotifications = () => {
