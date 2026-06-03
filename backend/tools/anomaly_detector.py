@@ -9,6 +9,9 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 
 from tools.base import BaseTool
+from utils.logger import get_logger
+
+log = get_logger(__name__)
 
 NUMERIC_FIELDS = ("temperature", "pressure", "vibration", "rpm")
 
@@ -128,8 +131,12 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
                 model.fit(numeric)
                 if int(model.predict(numeric.tail(1))[0]) == -1:
                     score += 1
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning(
+                    "AnomalyDetector: Isolation Forest scoring failed (%s); "
+                    "falling back to z-score/threshold flags only.",
+                    exc,
+                )
 
         if score >= 3:
             return "high"

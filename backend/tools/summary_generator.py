@@ -6,29 +6,38 @@ from typing import Any
 
 from llm.client import LLMClient
 from tools.base import BaseTool
+from utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class SummaryGenerator(BaseTool[dict[str, Any], str]):
     name = "summary_generator"
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self._init_error: str | None = None
         if llm_client is not None:
             self._llm_client = llm_client
         else:
             try:
                 self._llm_client = LLMClient()
-            except ValueError:
+            except ValueError as exc:
                 self._llm_client = None
+                self._init_error = str(exc)
 
     def run(self, payload: dict[str, Any], **kwargs: Any) -> str:
         if self._llm_client is None:
-            return self._fallback(payload)
+            reason = self._init_error or "the language model client is not configured"
+            log.warning("SummaryGenerator: %s; returning a heuristic (non-LLM) summary.", reason)
+            return self._fallback(payload, reason=reason)
 
         try:
             prompt = self._build_prompt(payload)
             return self._llm_client.generate_text(prompt, max_tokens=300, temperature=0.0)
-        except Exception:
-            return self._fallback(payload)
+        except Exception as exc:
+            reason = f"the language model request failed ({exc})"
+            log.warning("SummaryGenerator: %s; returning a heuristic (non-LLM) summary.", reason)
+            return self._fallback(payload, reason=reason)
 
     def _build_prompt(self, payload: dict[str, Any]) -> str:
         anomalies = payload.get("anomalies") or []
@@ -72,7 +81,7 @@ class SummaryGenerator(BaseTool[dict[str, Any], str]):
             "Return a concise investigation summary with the most significant findings first."
         )
 
-    def _fallback(self, payload: dict[str, Any]) -> str:
+    def _fallback(self, payload: dict[str, Any], reason: str | None = None) -> str:
         anomalies = payload.get("anomalies") or []
         incidents = payload.get("incidents") or []
         root_causes = payload.get("root_causes") or []
@@ -81,7 +90,11 @@ class SummaryGenerator(BaseTool[dict[str, Any], str]):
         anomaly_texts = []
         for item in anomalies:
             if isinstance(item, dict):
-                flags = [name.replace("_", " ") for name, value in item.items() if isinstance(value, bool) and value]
+                flags = [
+                    name.replace("_", " ")
+                    for name, value in item.items()
+                    if isinstance(value, bool) and value
+                ]
                 if flags:
                     anomaly_texts.append(", ".join(flags))
 
@@ -103,4 +116,9 @@ class SummaryGenerator(BaseTool[dict[str, Any], str]):
             f"- Root causes: {', '.join(causes) if causes else 'No validated root cause yet'}",
             f"- Recommendations: {len(recommendations)} investigation step(s) identified",
         ]
+        if reason:
+            lines.append(
+                f"(Note: this is a heuristic summary generated without the language model "
+                f"because {reason}.)"
+            )
         return " ".join(lines)
