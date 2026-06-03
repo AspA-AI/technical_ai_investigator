@@ -15,7 +15,9 @@ class FakeLLMClient:
     def __init__(self) -> None:
         self.prompt = ""
 
-    def generate_text(self, prompt: str, max_tokens: int = 0, temperature: float = 0.0) -> str:
+    def generate_text(
+        self, prompt: str, max_tokens: int = 0, temperature: float = 0.0
+    ) -> str:
         self.prompt = prompt
         return "Chat response: analyzed investigation state."
 
@@ -135,7 +137,9 @@ def test_chat_route_returns_answer(monkeypatch) -> None:
     monkeypatch.setattr("api.routes.chat.ChatService", FakeChatService)
 
     client = TestClient(app)
-    response = client.post("/api/investigations/1/chat", json={"question": "What happened?"})
+    response = client.post(
+        "/api/investigations/1/chat", json={"question": "What happened?"}
+    )
 
     assert response.status_code == 200
     assert response.json()["answer"] == "Live chat response."

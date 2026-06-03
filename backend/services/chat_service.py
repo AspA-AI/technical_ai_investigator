@@ -126,13 +126,17 @@ class ChatService:
             prompt_lines.extend(["", "Anomalies:", json.dumps(anomalies, indent=2)])
 
         if incidents:
-            prompt_lines.extend(["", "Historical incidents:", json.dumps(incidents, indent=2)])
+            prompt_lines.extend(
+                ["", "Historical incidents:", json.dumps(incidents, indent=2)]
+            )
 
         if root_causes:
             prompt_lines.extend(["", "Root causes:", json.dumps(root_causes, indent=2)])
 
         if recommendations:
-            prompt_lines.extend(["", "Recommendations:", json.dumps(recommendations, indent=2)])
+            prompt_lines.extend(
+                ["", "Recommendations:", json.dumps(recommendations, indent=2)]
+            )
 
         # include a short sample of the uploaded raw data when available
         uploaded_raw = state.get("uploaded_raw")
@@ -147,7 +151,9 @@ class ChatService:
                 content = msg.get("content", "")
                 prompt_lines.append(f"{role}: {content}")
 
-        prompt_lines.extend(["", "User's current question:", question, "", "Your response:"])
+        prompt_lines.extend(
+            ["", "User's current question:", question, "", "Your response:"]
+        )
         return "\n".join(prompt_lines)
 
     def _clean_response(self, text: str) -> str:
@@ -181,7 +187,11 @@ class ChatService:
                 return f"The identified root causes are: {causes}."
             return "No root cause was identified in this investigation."
 
-        if "recommend" in question_text or "next step" in question_text or "action" in question_text:
+        if (
+            "recommend" in question_text
+            or "next step" in question_text
+            or "action" in question_text
+        ):
             if recommendations:
                 recs = ", ".join(str(item) for item in recommendations)
                 return f"Recommended actions: {recs}"
