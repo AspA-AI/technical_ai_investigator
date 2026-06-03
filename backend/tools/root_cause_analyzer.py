@@ -7,33 +7,48 @@ from typing import Any
 
 from llm.client import LLMClient
 from tools.base import BaseTool
+from utils.logger import get_logger
+
+log = get_logger(__name__)
 
 
 class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
     name = "root_cause_analysis"
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
+        self._init_error: str | None = None
         if llm_client is not None:
             self._llm_client = llm_client
         else:
             try:
                 self._llm_client = LLMClient()
-            except ValueError:
+            except ValueError as exc:
                 self._llm_client = None
+                self._init_error = str(exc)
 
     def run(self, payload: dict[str, Any], **kwargs: Any) -> list[dict[str, Any]]:
         anomalies = payload.get("anomalies") or []
         incidents = payload.get("incidents") or []
 
-        prompt = self._build_prompt(anomalies, incidents)
         if self._llm_client is None:
-            return self._fallback(anomalies, incidents)
+            reason = self._init_error or "the language model client is not configured"
+            log.warning("RootCauseAnalyzer: %s; returning a heuristic (non-LLM) estimate.", reason)
+            return self._fallback(anomalies, incidents, reason=reason)
 
+        prompt = self._build_prompt(anomalies, incidents)
         try:
             response = self._llm_client.generate_text(prompt, max_tokens=400, temperature=0.0)
-            return self._parse_response(response) or self._fallback(anomalies, incidents)
-        except Exception:
-            return self._fallback(anomalies, incidents)
+        except Exception as exc:
+            reason = f"the language model request failed ({exc})"
+            log.warning("RootCauseAnalyzer: %s; returning a heuristic (non-LLM) estimate.", reason)
+            return self._fallback(anomalies, incidents, reason=reason)
+
+        parsed = self._parse_response(response)
+        if not parsed:
+            reason = "the language model response could not be parsed into root-cause candidates"
+            log.warning("RootCauseAnalyzer: %s; returning a heuristic (non-LLM) estimate.", reason)
+            return self._fallback(anomalies, incidents, reason=reason)
+        return parsed
 
     def _build_prompt(self, anomalies: list[Any], incidents: list[Any]) -> str:
         anomaly_texts = []
@@ -85,16 +100,22 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
             pass
         return []
 
-    def _fallback(self, anomalies: list[Any], incidents: list[Any]) -> list[dict[str, Any]]:
-        ranked = []
+    def _fallback(
+        self,
+        anomalies: list[Any],
+        incidents: list[Any],
+        reason: str | None = None,
+    ) -> list[dict[str, Any]]:
+        ranked: list[dict[str, Any]] = []
         if not anomalies and not incidents:
-            return [
+            ranked = [
                 {
                     "cause": "insufficient evidence",
                     "confidence": 25,
                     "evidence": ["No anomaly information or incident matches were available."],
                 }
             ]
+            return self._annotate_degraded(ranked, reason)
 
         if anomalies:
             ranked.append(
@@ -112,15 +133,34 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
                     ranked.append(
                         {
                             "cause": root_cause,
-                            "confidence": max(10, min(90, int(round(float(incident.get("similarity", 0.0)) * 100)))),
+                            "confidence": max(
+                                10,
+                                min(90, int(round(float(incident.get("similarity", 0.0)) * 100))),
+                            ),
                             "evidence": [f"Matched incident {incident.get('incident_id')}"],
                         }
                     )
 
-        return ranked or [
-            {
-                "cause": "insufficient evidence",
-                "confidence": 25,
-                "evidence": ["No usable anomaly or incident data was available."],
-            }
-        ]
+        if not ranked:
+            ranked = [
+                {
+                    "cause": "insufficient evidence",
+                    "confidence": 25,
+                    "evidence": ["No usable anomaly or incident data was available."],
+                }
+            ]
+        return self._annotate_degraded(ranked, reason)
+
+    @staticmethod
+    def _annotate_degraded(
+        ranked: list[dict[str, Any]], reason: str | None
+    ) -> list[dict[str, Any]]:
+        """Mark heuristic results so callers know the LLM was not used (and why)."""
+        if not reason:
+            return ranked
+        notice = f"Heuristic estimate — generated without the language model because {reason}."
+        for item in ranked:
+            item["degraded"] = True
+            item["notice"] = notice
+            item.setdefault("evidence", []).append(notice)
+        return ranked

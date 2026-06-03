@@ -235,3 +235,54 @@ def test_summary_generator_fallback_on_llm_error() -> None:
     assert "Investigation summary:" in summary
     assert "bearing wear (75%)" in summary
     assert "99" in summary
+
+
+def test_root_cause_analyzer_surfaces_degraded_notice_on_llm_error() -> None:
+    class FakeLLMClient:
+        def generate_text(self, prompt: str, max_tokens: int = 0, temperature: float = 0.0) -> str:
+            raise RuntimeError("boom")
+
+    result = RootCauseAnalyzer(llm_client=FakeLLMClient()).run(
+        {
+            "anomalies": [{"pressure_drop": True}],
+            "incidents": [{"incident_id": 33, "root_cause": "bearing wear", "similarity": 0.75}],
+        }
+    )
+
+    assert result, "expected a heuristic fallback result"
+    assert all(item.get("degraded") is True for item in result)
+    assert all(item.get("notice") for item in result)
+    assert any("without the language model" in item["notice"] for item in result)
+    assert any("boom" in item["notice"] for item in result)
+
+
+def test_root_cause_analyzer_not_degraded_when_llm_succeeds() -> None:
+    class FakeLLMClient:
+        def generate_text(self, prompt: str, max_tokens: int = 0, temperature: float = 0.0) -> str:
+            return '[{"cause": "cooling degradation", "confidence": 88, "evidence": ["x"]}]'
+
+    result = RootCauseAnalyzer(llm_client=FakeLLMClient()).run(
+        {"anomalies": [{"temperature_spike": True}], "incidents": []}
+    )
+
+    assert all("degraded" not in item for item in result)
+    assert all("notice" not in item for item in result)
+
+
+def test_summary_generator_surfaces_degraded_note_on_llm_error() -> None:
+    class FakeLLMClient:
+        def generate_text(self, prompt: str, max_tokens: int = 0, temperature: float = 0.0) -> str:
+            raise RuntimeError("boom")
+
+    summary = SummaryGenerator(llm_client=FakeLLMClient()).run(
+        {
+            "anomalies": [{"temperature_spike": True}],
+            "incidents": [],
+            "root_causes": [{"cause": "bearing wear", "confidence": 75}],
+            "recommendations": ["Inspect bearing assembly"],
+        }
+    )
+
+    assert summary.startswith("Investigation summary:")
+    assert "heuristic summary generated without the language model" in summary
+    assert "boom" in summary
