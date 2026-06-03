@@ -182,6 +182,47 @@ log.error("failed", exc_info=True)
 
 View API logs: `make logs-api`. Set `NO_COLOR=1` to disable ANSI colors.
 
+## MCP server (Phase 7)
+
+The six investigation tools are exposed over the **Model Context Protocol** so
+external agents (Claude Desktop, Cursor, an internal engineering agent, ...) can
+discover and call them. The same tools remain available over REST at
+`/api/mcp/tools` and `/api/mcp/{tool_name}`; both paths delegate to one shared
+registry (`backend/mcp_registry/`) so behaviour is identical.
+
+Tools: `anomaly_detector`, `historical_search`, `root_cause_analysis`,
+`investigation_planner`, `counterfactual_analysis`, `summary_generator`.
+
+Run it over stdio (default transport used by most MCP clients):
+
+```bash
+make mcp                      # or, from backend/:  PYTHONPATH=. python -m mcp_server
+```
+
+Or expose it over the network:
+
+```bash
+cd backend && PYTHONPATH=. python -m mcp_server --transport sse --host 0.0.0.0 --port 8001
+```
+
+Example Claude Desktop / MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "investigation-copilot": {
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "cwd": "/absolute/path/to/technical_ai_investigator/backend",
+      "env": { "PYTHONPATH": "." }
+    }
+  }
+}
+```
+
+> The registry package is named `mcp_registry` (not `mcp`) so it does not shadow
+> the official `mcp` SDK that `fastmcp` depends on.
+
 ## Docker details
 
 - **API** — Python 3.12, installs `backend/requirements.txt`, hot-reload via volume mount
@@ -197,7 +238,7 @@ View API logs: `make logs-api`. Set `NO_COLOR=1` to disable ANSI colors.
 | 4 Vector DB (incidents) | Next |
 | 5 Tools | Planned |
 | 6 LangGraph pipeline | Planned |
-| 7 MCP server exposure | Done |
+| 7 MCP server exposure (REST + MCP protocol via FastMCP) | Done |
 | 8 LLM reasoning + investigation summary | Done |
 | 9 API UI data / state exposure | Done |
 | 10 Report generation | Done |

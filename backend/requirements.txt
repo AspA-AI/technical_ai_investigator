@@ -11,7 +11,7 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 pydantic_core==2.27.2
 python-multipart==0.0.20
-python-dotenv==1.0.1
+python-dotenv==1.2.2  # >=1.1.0 required by fastmcp (Phase 7)
 
 # --- Database ---
 sqlalchemy==2.0.36
@@ -42,6 +42,53 @@ langgraph-checkpoint==2.1.2
 langgraph-sdk==0.1.74
 langsmith==0.8.8
 tenacity==9.1.4
+
+# --- Phase 7 MCP server (FastMCP exposes the tools over the Model Context Protocol) ---
+# fastmcp 2.9.2 / mcp 1.9.4 are pinned because they keep starlette < 0.42 (FastAPI 0.115.6)
+# and stay compatible with pydantic 2.10.4. Newer releases require starlette/pydantic bumps.
+fastmcp==2.9.2
+mcp==1.9.4
+sse-starlette==3.0.3
+httpx-sse==0.4.3
+openapi-pydantic==0.5.1
+authlib==1.7.2
+joserfc==1.7.0
+cryptography==48.0.0
+cffi==2.0.0
+pycparser==3.0
+PyJWT==2.13.0
+cyclopts==4.16.1
+typer==0.26.7
+shellingham==1.5.4
+docstring_parser==0.18.0
+email-validator==2.3.0
+dnspython==2.8.0
+exceptiongroup==1.3.1
+rich==15.0.0
+rich-rst==2.0.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+Pygments==2.20.0
+pyperclip==1.11.0
+typing-inspection==0.4.2
+annotated-doc==0.0.4
+beartype==0.22.9
+griffelib==2.0.2
+attrs==26.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==2026.5.1
+jsonschema-path==0.5.0
+pathable==0.6.0
+jsonref==1.1.0
+opentelemetry-api==1.42.1
+cachetools==7.1.4
+py-key-value-aio==0.4.5
+aiofile==3.11.1
+caio==0.9.25
+uncalled-for==0.3.2
+more-itertools==11.1.0
 
 # --- Phase 10 report generation ---
 reportlab==4.5.1

@@ -28,7 +28,8 @@ backend/
 ├── vectorstore/                # Embeddings + PGVector (Phase 4)
 ├── database/                   # Engine, session, Base
 ├── config/                     # Settings from .env
-├── mcp/                        # MCP tool exposure (Phase 7)
+├── mcp_registry/               # Shared tool registry (Phase 7, REST + MCP)
+├── mcp_server.py               # FastMCP server exposing tools over MCP (Phase 7)
 └── datasets/                   # Raw uploads + seed data
 ```
 

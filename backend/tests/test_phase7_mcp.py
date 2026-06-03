@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from mcp.server import MCPToolNotFoundError, invoke_mcp_tool, list_mcp_tools
+from mcp_registry.server import MCPToolNotFoundError, invoke_mcp_tool, list_mcp_tools
 
 
 def test_list_mcp_tools_contains_expected_names() -> None:
