@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv/
+.env
+backend/.env
+!.env.example
+!backend/.env.example
+
+# Node
+node_modules/
+frontend/dist/
+
+# Data
+backend/datasets/uploads/*
+!backend/datasets/uploads/.gitkeep
+backend/datasets/raw/*
+!backend/datasets/raw/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
