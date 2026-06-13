@@ -24,9 +24,7 @@ class LLMClient:
     ) -> str:
         response = self._client.chat.completions.create(
             model=self._model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=temperature,
         )

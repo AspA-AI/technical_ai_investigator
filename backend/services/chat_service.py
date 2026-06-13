@@ -8,11 +8,11 @@ from typing import Any
 
 from llm.client import LLMClient
 from models.investigation import InvestigationRun
-from services.errors import InvestigationNotFoundError
+from services.errors import InvestigationNotFoundError, UploadContentNotFoundError
+from services.ingestion_service import IngestionService
+from utils.summary_payload import get_summary_text
 from sqlalchemy.orm import Session
 from utils.logger import get_logger
-from config.settings import settings
-from pathlib import Path
 
 log = get_logger(__name__)
 
@@ -42,57 +42,17 @@ class ChatService:
             except json.JSONDecodeError:
                 log.warning("Invalid investigation state JSON for %s", investigation_id)
 
-        # attach raw uploaded file content (if available) so the agent can reference user data
         upload_id = getattr(investigation, "upload_id", None)
         if upload_id:
-            try:
-                raw_dir = Path(settings.RAW_DATA_DIR)
-                pattern = f"{upload_id}_*"
-                match = next(raw_dir.glob(pattern), None)
-                if match and match.is_file():
-                    raw_text = match.read_text(errors="ignore")
-                    # limit to first 8KB to avoid huge prompts
-                    state["uploaded_raw"] = raw_text[:8192]
-            except Exception:
-                log.debug("Could not load raw uploaded file for %s", upload_id)
+            upload = IngestionService(self._db).get_uploaded_content(upload_id)
+            if upload is None or not upload.content_text.strip():
+                raise UploadContentNotFoundError(
+                    f"Uploaded content was not found for upload_id={upload_id}"
+                )
+            # limit to first 8KB to avoid huge prompts
+            state["uploaded_raw"] = upload.content_text[:8192]
 
         return state
-
-    def _is_greeting(self, question: str) -> bool:
-        """Detect if the question is a casual greeting."""
-        greetings = [
-            "hello",
-            "hi",
-            "hey",
-            "greetings",
-            "good morning",
-            "good afternoon",
-            "good evening",
-            "sup",
-            "what's up",
-            "how are you",
-            "how do you do",
-        ]
-        ql = question.lower().strip()
-        return any(g in ql for g in greetings)
-
-    def _is_off_topic(self, question: str) -> bool:
-        """Detect if the question is off-topic (personal/unrelated)."""
-        off_topic_keywords = [
-            "family",
-            "wife",
-            "husband",
-            "child",
-            "birthday",
-            "school",
-            "relationship",
-            "marriage",
-            "love",
-            "politics",
-            "religion",
-        ]
-        ql = question.lower()
-        return any(k in ql for k in off_topic_keywords)
 
     def _build_prompt(
         self,
@@ -100,61 +60,178 @@ class ChatService:
         state: dict[str, Any],
         history: list[dict[str, str]] | None = None,
     ) -> str:
-        summary = state.get("summary", "No summary available.")
+
+        summary = get_summary_text(state) or "No investigation summary available."
         failure_summary = state.get("failure_summary", "")
+        uploaded_raw = state.get("uploaded_raw", "")
+
         anomalies = state.get("anomalies", [])
         incidents = state.get("incidents", [])
         root_causes = state.get("root_causes", [])
         recommendations = state.get("recommendations", [])
 
-        prompt_lines = [
-            "You are a concise, conversational engineering investigation assistant.",
-            "Keep responses natural and brief. Only reference investigation details when the user asks about them.",
-            "Use clear language, avoid verbose explanations, and format responses readably (use short paragraphs, not markdown).",
-            "If the user asks a casual greeting like 'hello', respond naturally without forcing investigation context.",
-            "If asked about your role or capabilities, briefly explain you analyze investigation data without over-elaborating.",
-            "Do NOT invent facts or hallucinate beyond the provided investigation state.",
-            "",
-            "Investigation summary:",
-            summary,
-        ]
+        evidence = []
 
         if failure_summary:
-            prompt_lines.extend(["", "Failure summary:", failure_summary])
+            evidence.append(f"Failure Summary:\n{failure_summary}")
 
         if anomalies:
-            prompt_lines.extend(["", "Anomalies:", json.dumps(anomalies, indent=2)])
+            evidence.append("Detected Anomalies:")
+
+            for anomaly in anomalies:
+                if not isinstance(anomaly, dict):
+                    continue
+
+                flags = [
+                    key.replace("_", " ")
+                    for key, value in anomaly.items()
+                    if isinstance(value, bool) and value
+                ]
+
+                if flags:
+                    evidence.append(f"- Active anomaly signals: {', '.join(flags)}")
+
+                risk = anomaly.get("risk")
+                if risk:
+                    evidence.append(f"  Risk Level: {risk}")
+
+                signals = anomaly.get("signals")
+                if isinstance(signals, dict) and signals:
+                    strongest = max(signals.items(), key=lambda item: abs(item[1]))
+
+                    evidence.append(
+                        f"  Strongest sensor deviation: "
+                        f"{strongest[0]} ({strongest[1]:+.2f})"
+                    )
 
         if incidents:
-            prompt_lines.extend(
-                ["", "Historical incidents:", json.dumps(incidents, indent=2)]
-            )
+            evidence.append("")
+            evidence.append("Historical Incident Matches:")
+
+            for incident in incidents[:5]:
+                evidence.append(
+                    f"- Incident {incident.get('incident_id')} "
+                    f"(Similarity={incident.get('similarity')}) "
+                    f"Root Cause={incident.get('root_cause')}"
+                )
 
         if root_causes:
-            prompt_lines.extend(["", "Root causes:", json.dumps(root_causes, indent=2)])
+            evidence.append("")
+            evidence.append("Current Root Cause Hypotheses:")
+
+            for cause in root_causes[:5]:
+                evidence.append(
+                    f"- {cause.get('cause')} (Confidence={cause.get('confidence')}%)"
+                )
 
         if recommendations:
-            prompt_lines.extend(
-                ["", "Recommendations:", json.dumps(recommendations, indent=2)]
+            evidence.append("")
+            evidence.append("Investigation Recommendations:")
+
+            for recommendation in recommendations:
+                evidence.append(f"- {recommendation}")
+
+        evidence_block = "\n".join(evidence)
+
+        uploaded_data_block = ""
+        if uploaded_raw:
+            uploaded_data_block = (
+                "User Provided Uploaded Data (source input for the investigation):\n"
+                f"{uploaded_raw}"
+            )
+        else:
+            uploaded_data_block = (
+                "User Provided Uploaded Data (source input for the investigation):\n"
+                "No raw uploaded file content could be loaded."
             )
 
-        # include a short sample of the uploaded raw data when available
-        uploaded_raw = state.get("uploaded_raw")
-        if uploaded_raw:
-            prompt_lines.extend(["", "Uploaded raw file sample:", uploaded_raw])
+        history_block = ""
 
-        # include conversation history context if available
-        if history and len(history) > 0:
-            prompt_lines.extend(["", "Conversation history (for context):"])
-            for msg in history[-4:]:  # keep last 4 messages for context
-                role = "User" if msg.get("role") == "user" else "Assistant"
-                content = msg.get("content", "")
-                prompt_lines.append(f"{role}: {content}")
+        if history:
+            formatted: list[str] = []
+            total_chars = 0
+            max_history_chars = 8000
 
-        prompt_lines.extend(
-            ["", "User's current question:", question, "", "Your response:"]
-        )
-        return "\n".join(prompt_lines)
+            for message in reversed(history):
+                role = "User" if message.get("role") == "user" else "Assistant"
+                entry = f"{role}: {message.get('content', '')}"
+                entry_len = len(entry) + 1
+                if formatted and total_chars + entry_len > max_history_chars:
+                    break
+                formatted.append(entry)
+                total_chars += entry_len
+
+            history_block = "\n".join(reversed(formatted))
+
+        return f"""
+                You are an Engineering Investigation Copilot.
+
+                Your role is to help users understand engineering investigations,
+                sensor telemetry, anomaly detection results, historical incidents,
+                root-cause analysis, and investigation recommendations.
+
+                Behavior Rules:
+
+                - Speak naturally and professionally.
+                - If the user greets you, greet them normally.
+                - If the user asks a question unrelated to the investigation,
+                politely explain that you can only assist with the current
+                engineering investigation and available evidence.
+                - Do not hallucinate facts.
+                - Do not invent sensor readings.
+                - Do not invent incident records.
+                - Do not claim certainty unless evidence supports it.
+
+                Evidence Priority:
+
+                1. Raw uploaded data from the user
+                2. Uploaded telemetry and anomaly signals derived from that data
+                3. Detected anomaly patterns
+                4. Historical incident matches
+                5. Root-cause hypotheses
+                6. Recommendations
+
+                IMPORTANT:
+
+                The raw uploaded data below is the user's original input.
+                The investigation summary and evidence below are the derived
+                analysis of that same upload.
+
+                Use the uploaded data as the primary source of truth for what
+                the user provided.
+
+                Historical incidents are supporting evidence only.
+
+                If telemetry conflicts with historical incidents,
+                trust telemetry first.
+
+                If asked to justify a root cause,
+                always explain which anomaly signals,
+                sensor behavior,
+                or historical incidents support it.
+
+                User Provided Uploaded Data:
+
+                {uploaded_data_block}
+
+                Investigation Summary:
+
+                {summary}
+
+                Investigation Evidence:
+
+                {evidence_block}
+
+                Conversation History:
+
+                {history_block}
+
+                Current User Question:
+
+                {question}
+
+                Answer:
+                """
 
     def _clean_response(self, text: str) -> str:
         """Clean markdown formatting from response (** and other markers)."""
@@ -168,74 +245,48 @@ class ChatService:
         text = re.sub(r"```[\s\S]*?```", "", text)
         return text.strip()
 
-    def _fallback_answer(self, question: str, state: dict[str, Any]) -> str:
-        summary = state.get("summary", "No summary is available.")
-        root_causes = state.get("root_causes", [])
-        recommendations = state.get("recommendations", [])
-
-        question_text = question.lower().strip()
-
-        # Greeting response
-        if self._is_greeting(question):
-            return "Hello! I'm here to help analyze this investigation. What would you like to know?"
-
-        if "root cause" in question_text or "cause" in question_text:
-            if root_causes:
-                causes = ", ".join(
-                    str(item.get("cause", "unknown")) for item in root_causes
-                )
-                return f"The identified root causes are: {causes}."
-            return "No root cause was identified in this investigation."
-
-        if (
-            "recommend" in question_text
-            or "next step" in question_text
-            or "action" in question_text
-        ):
-            if recommendations:
-                recs = ", ".join(str(item) for item in recommendations)
-                return f"Recommended actions: {recs}"
-            return "No specific recommendations are available at this time."
-
-        if "summary" in question_text or "what happened" in question_text:
-            return summary
-
-        # Default: reference summary and offer help
-        return f"Based on the investigation: {summary}. Feel free to ask about specific aspects like root causes or recommendations."
-
     def answer(
         self,
         investigation_id: int,
         question: str,
         history: list[dict[str, str]] | None = None,
     ) -> str:
+
         state = self._load_investigation(investigation_id)
 
-        # Greeting: respond naturally without forcing investigation context
-        if self._is_greeting(question):
-            return "Hello! I'm here to help analyze this investigation. What would you like to know?"
-
-        # Off-topic: gentle redirect
-        if self._is_off_topic(question):
-            return "I focus on engineering investigations and the data you've uploaded. Feel free to ask me anything about the current analysis!"
-
-        prompt = self._build_prompt(question, state, history)
+        prompt = self._build_prompt(
+            question=question,
+            state=state,
+            history=history,
+        )
 
         if self._llm_client is None:
             try:
                 self._llm_client = LLMClient()
             except ValueError as exc:
-                log.warning("LLM client unavailable for chat: %s", exc)
+                log.warning(
+                    "LLM client unavailable for chat: %s",
+                    exc,
+                )
                 self._llm_client = None
 
         if self._llm_client is not None:
             try:
                 response = self._llm_client.generate_text(
-                    prompt, max_tokens=512, temperature=0.6
+                    prompt,
+                    max_tokens=512,
+                    temperature=0.3,
                 )
-                # Clean up markdown formatting
-                return self._clean_response(response)
-            except Exception as exc:
-                log.warning("LLM chat generation failed, falling back: %s", exc)
 
-        return self._fallback_answer(question, state)
+                return self._clean_response(response)
+
+            except Exception as exc:
+                log.warning(
+                    "LLM chat generation failed: %s",
+                    exc,
+                )
+
+        return (
+            "I am unable to access the investigation assistant "
+            "right now. Please try again shortly."
+        )

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -13,9 +13,17 @@ EMBEDDING_DIMENSION = 1536
 
 class Incident(Base):
     __tablename__ = "incidents"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_type",
+            "incident_id",
+            name="uq_incidents_source_type_incident_id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    incident_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(32), default="nasa", index=True)
+    incident_id: Mapped[int] = mapped_column(Integer, index=True)
     failure: Mapped[str] = mapped_column(String(512))
     root_cause: Mapped[str] = mapped_column(String(512))
     resolution: Mapped[str] = mapped_column(String(512))

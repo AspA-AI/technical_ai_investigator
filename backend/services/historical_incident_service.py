@@ -97,6 +97,7 @@ class HistoricalIncidentService:
                     failure=metadata["failure"],
                     root_cause=metadata["root_cause"],
                     resolution=metadata["resolution"],
+                    source_type="nasa",
                 )
                 seeded += 1
 

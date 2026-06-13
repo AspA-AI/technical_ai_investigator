@@ -1,4 +1,4 @@
-"""Run LangGraph investigation pipeline (Phase 6)."""
+"""Run LangGraph investigation pipeline leveraging MCP Registry routing (Phase 6)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from agents.investigation_graph import build_investigation_graph
 from models.investigation import InvestigationRun
-from services.errors import InvestigationNotFoundError
-from services.ingestion_service import IngestionService
+from services.errors import InvestigationNotFoundError, UploadContentNotFoundError
+from services.ingestion_service import IngestionService, parse_sensor_log_csv
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -29,45 +29,81 @@ class InvestigationService:
 
     def run_investigation(self, upload_id: str) -> dict:
         rows = IngestionService(self._db).get_rows_by_upload(upload_id)
-        if not rows:
-            raise InvestigationNotFoundError(
-                f"No uploaded sensor rows were found for upload_id={upload_id}"
-            )
+        sensor_rows: list[dict[str, Any]] = []
+        if rows:
+            sensor_rows = [
+                {
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                    "temperature": row.temperature,
+                    "pressure": row.pressure,
+                    "vibration": row.vibration,
+                    "rpm": row.rpm,
+                }
+                for row in rows
+            ]
+        else:
+            upload = IngestionService(self._db).get_uploaded_content(upload_id)
+            if upload is None or not upload.content_text.strip():
+                raise UploadContentNotFoundError(
+                    f"Uploaded content was not found for upload_id={upload_id}"
+                )
 
-        sensor_rows = [
-            {
-                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                "temperature": row.temperature,
-                "pressure": row.pressure,
-                "vibration": row.vibration,
-                "rpm": row.rpm,
-            }
-            for row in rows
-        ]
+            parsed_rows = parse_sensor_log_csv(
+                upload.filename,
+                upload.content_text.encode("utf-8"),
+            )
+            sensor_rows = [
+                {
+                    "timestamp": row["timestamp"].isoformat()
+                    if row["timestamp"]
+                    else None,
+                    "temperature": row["temperature"],
+                    "pressure": row["pressure"],
+                    "vibration": row["vibration"],
+                    "rpm": row["rpm"],
+                }
+                for row in parsed_rows
+            ]
+
         initial_state = {
             "upload_id": upload_id,
             "sensor_rows": sensor_rows,
+            "failure_summary": f"Investigation for upload {upload_id} with {len(sensor_rows)} data points.",
         }
 
-        log.service("Running investigation upload_id=%s rows=%s", upload_id, len(sensor_rows))
-        final_state = self.graph.invoke(initial_state)
+        log.service(
+            "Running investigation upload_id=%s rows=%s", upload_id, len(sensor_rows)
+        )
+
+        # FIX: Pass DB session cleanly inside graph config state so MCP tools can access it
+        config = {"configurable": {"db": self._db}}
+        try:
+            final_state = self.graph.invoke(initial_state, config=config)
+        except TypeError:
+            final_state = self.graph.invoke(initial_state)
+        # print(
+        #     "//////////////////////////////////////////////////////////////////////////////////////////"
+        # )
+        # print("Final investigation state:", final_state)
+        # print(
+        #     "//////////////////////////////////////////////////////////////////////////////////////////"
+        # )
+
         if not isinstance(final_state, dict):
             final_state = dict(final_state)
 
-        investigation = InvestigationRun(
-            upload_id=upload_id,
-            status="completed",
-            state_json=json.dumps(final_state, default=str),
+        run_status = str(
+            final_state.get("investigation_status")
+            or (
+                "no_relevant_historical_match"
+                if final_state.get("historical_match_status") == "no_match"
+                else "completed"
+            )
         )
-        self._db.add(investigation)
-        self._db.commit()
-        self._db.refresh(investigation)
-
-        log.db("Persisted investigation_id=%s upload_id=%s", investigation.id, upload_id)
         return {
-            "investigation_id": investigation.id,
+            "investigation_id": final_state.get("investigation_id"),
             "upload_id": upload_id,
-            "status": investigation.status,
+            "status": run_status,
             "state": final_state,
         }
 

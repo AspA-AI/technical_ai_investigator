@@ -30,8 +30,12 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
             return self._fallback(anomalies, incidents)
 
         try:
-            response = self._llm_client.generate_text(prompt, max_tokens=400, temperature=0.0)
-            return self._parse_response(response) or self._fallback(anomalies, incidents)
+            response = self._llm_client.generate_text(
+                prompt, max_tokens=400, temperature=0.0
+            )
+            return self._parse_response(response) or self._fallback(
+                anomalies, incidents
+            )
         except Exception:
             return self._fallback(anomalies, incidents)
 
@@ -39,7 +43,11 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
         anomaly_texts = []
         for anomaly in anomalies:
             if isinstance(anomaly, dict):
-                flags = [name.replace("_", " ") for name, value in anomaly.items() if isinstance(value, bool) and value]
+                flags = [
+                    name.replace("_", " ")
+                    for name, value in anomaly.items()
+                    if isinstance(value, bool) and value
+                ]
                 if flags:
                     anomaly_texts.append(", ".join(flags))
 
@@ -76,7 +84,9 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
                     cleaned.append(
                         {
                             "cause": str(item.get("cause", "")).strip(),
-                            "confidence": int(item.get("confidence", 0)) if item.get("confidence") is not None else 0,
+                            "confidence": int(item.get("confidence", 0))
+                            if item.get("confidence") is not None
+                            else 0,
                             "evidence": [str(e) for e in item.get("evidence", []) if e],
                         }
                     )
@@ -85,23 +95,41 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
             pass
         return []
 
-    def _fallback(self, anomalies: list[Any], incidents: list[Any]) -> list[dict[str, Any]]:
+    def _fallback(
+        self, anomalies: list[Any], incidents: list[Any]
+    ) -> list[dict[str, Any]]:
         ranked = []
+        seen_causes: set[str] = set()
+
+        def add_cause(item: dict[str, Any]) -> None:
+            cause = str(item.get("cause") or "").strip()
+            if not cause:
+                return
+            normalized = cause.lower()
+            if normalized in seen_causes:
+                return
+            seen_causes.add(normalized)
+            ranked.append(item)
+
         if not anomalies and not incidents:
             return [
                 {
                     "cause": "insufficient evidence",
                     "confidence": 25,
-                    "evidence": ["No anomaly information or incident matches were available."],
+                    "evidence": [
+                        "No anomaly information or incident matches were available."
+                    ],
                 }
             ]
 
         if anomalies:
-            ranked.append(
+            add_cause(
                 {
                     "cause": "sensor anomaly pattern",
                     "confidence": 50,
-                    "evidence": ["Anomaly signals were detected in the sensor telemetry."],
+                    "evidence": [
+                        "Anomaly signals were detected in the sensor telemetry."
+                    ],
                 }
             )
 
@@ -109,11 +137,23 @@ class RootCauseAnalyzer(BaseTool[dict[str, Any], list[dict[str, Any]]]):
             if isinstance(incident, dict):
                 root_cause = str(incident.get("root_cause") or "").strip()
                 if root_cause:
-                    ranked.append(
+                    add_cause(
                         {
                             "cause": root_cause,
-                            "confidence": max(10, min(90, int(round(float(incident.get("similarity", 0.0)) * 100)))),
-                            "evidence": [f"Matched incident {incident.get('incident_id')}"],
+                            "confidence": max(
+                                10,
+                                min(
+                                    90,
+                                    int(
+                                        round(
+                                            float(incident.get("similarity", 0.0)) * 100
+                                        )
+                                    ),
+                                ),
+                            ),
+                            "evidence": [
+                                f"Matched incident {incident.get('incident_id')}"
+                            ],
                         }
                     )
 

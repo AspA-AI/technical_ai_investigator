@@ -9,10 +9,13 @@ from sqlalchemy.orm import Session
 
 from tools import (
     AnomalyDetector,
+    ArchivedIssueSearch,
     CounterfactualAnalysis,
+    GitHubIssuePublisher,
     HistoricalIncidentSearch,
     InvestigationPlanner,
     RootCauseAnalyzer,
+    TechnicalReportGenerator,
     SummaryGenerator,
 )
 
@@ -35,6 +38,11 @@ MCP_TOOL_REGISTRY: dict[str, MCPTool] = {
         cls=HistoricalIncidentSearch,
         requires_db=True,
     ),
+    "archived_issue_search": MCPTool(
+        name="archived_issue_search",
+        cls=ArchivedIssueSearch,
+        requires_db=True,
+    ),
     "root_cause_analysis": MCPTool(
         name="root_cause_analysis",
         cls=RootCauseAnalyzer,
@@ -53,6 +61,16 @@ MCP_TOOL_REGISTRY: dict[str, MCPTool] = {
     "summary_generator": MCPTool(
         name="summary_generator",
         cls=SummaryGenerator,
+        requires_db=False,
+    ),
+    "github_issue_publisher": MCPTool(
+        name="github_issue_publisher",
+        cls=GitHubIssuePublisher,
+        requires_db=False,
+    ),
+    "generate_technical_report": MCPTool(
+        name="generate_technical_report",
+        cls=TechnicalReportGenerator,
         requires_db=False,
     ),
 }

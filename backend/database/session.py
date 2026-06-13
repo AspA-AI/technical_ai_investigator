@@ -41,5 +41,33 @@ def init_db() -> None:
         with engine.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             if inspect(conn).has_table("incidents"):
+                conn.execute(
+                    text(
+                        "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS source_type "
+                        "varchar(32) NOT NULL DEFAULT 'nasa'"
+                    )
+                )
                 conn.execute(text("ALTER TABLE incidents ADD COLUMN IF NOT EXISTS embedding vector(1536)"))
+                conn.execute(
+                    text(
+                        "UPDATE incidents SET source_type = 'nasa' "
+                        "WHERE source_type IS NULL OR source_type = ''"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_incident_id_key"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE incidents DROP CONSTRAINT IF EXISTS uq_incidents_source_type_incident_id"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE incidents ADD CONSTRAINT uq_incidents_source_type_incident_id "
+                        "UNIQUE (source_type, incident_id)"
+                    )
+                )
     Base.metadata.create_all(bind=engine)

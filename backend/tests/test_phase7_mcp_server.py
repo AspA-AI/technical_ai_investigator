@@ -5,17 +5,22 @@ from __future__ import annotations
 import json
 
 import pytest
-from fastmcp import Client
+
+fastmcp = pytest.importorskip("fastmcp")
+Client = fastmcp.Client
 
 from mcp_server import mcp_server
 
 EXPECTED_TOOLS = {
+    "publish_github_investigation_issue",
     "anomaly_detector",
     "historical_search",
+    "archived_issue_search",
     "root_cause_analysis",
     "investigation_planner",
     "counterfactual_analysis",
     "summary_generator",
+    "generate_technical_report",
 }
 
 

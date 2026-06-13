@@ -6,12 +6,14 @@ import io
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.sensor_log import SensorLogRecord
+from models.upload import UploadedFile
 from services.errors import CsvValidationError, EmptyCsvError
 from utils.logger import get_logger
 
@@ -23,8 +25,27 @@ REQUIRED_FIELDS = ("timestamp", "temperature", "pressure", "vibration", "rpm")
 COLUMN_ALIASES: dict[str, list[str]] = {
     "timestamp": ["timestamp", "time", "datetime", "date", "ts", "recorded_at"],
     "temperature": ["temperature", "temp", "temp_c", "temperature_c"],
-    "pressure": ["pressure", "press", "pressure_psi"],
-    "vibration": ["vibration", "vib", "vibration_mm"],
+    "pressure": [
+        "pressure",
+        "press",
+        "pressure_psi",
+        "pressure_bar",
+        "press_bar",
+        "bar",
+        "pressure_kpa",
+        "press_kpa",
+        "kpa",
+    ],
+    "vibration": [
+        "vibration",
+        "vib",
+        "vibration_mm",
+        "vibration_mm_s",
+        "vibration_mms",
+        "vibration_mmps",
+        "mm_s",
+        "mmps",
+    ],
     "rpm": ["rpm", "speed", "engine_rpm"],
 }
 
@@ -75,37 +96,81 @@ def _to_float(value) -> float | None:
         return None
 
 
+def parse_sensor_log_csv(filename: str, raw_bytes: bytes) -> list[dict[str, Any]]:
+    if not raw_bytes:
+        raise EmptyCsvError("Uploaded file is empty")
+
+    try:
+        df = pd.read_csv(io.BytesIO(raw_bytes))
+    except Exception as exc:
+        raise CsvValidationError("Could not read CSV file", details=str(exc)) from exc
+
+    if df.empty:
+        raise EmptyCsvError("CSV has no data rows")
+
+    column_map = _build_column_map(list(df.columns))
+    parsed_rows: list[dict[str, Any]] = []
+
+    for _, row in df.iterrows():
+        parsed_rows.append(
+            {
+                "timestamp": _parse_timestamp(row[column_map["timestamp"]]),
+                "temperature": _to_float(row[column_map["temperature"]]),
+                "pressure": _to_float(row[column_map["pressure"]]),
+                "vibration": _to_float(row[column_map["vibration"]]),
+                "rpm": _to_float(row[column_map["rpm"]]),
+                "source_filename": filename,
+            }
+        )
+
+    return parsed_rows
+
+
 class IngestionService:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def save_uploaded_content(
+        self,
+        upload_id: str,
+        filename: str,
+        content_text: str,
+    ) -> UploadedFile:
+        upload = (
+            self._db.query(UploadedFile)
+            .filter(UploadedFile.upload_id == upload_id)
+            .one_or_none()
+        )
+        if upload is None:
+            upload = UploadedFile(
+                upload_id=upload_id,
+                filename=filename,
+                content_text=content_text,
+            )
+            self._db.add(upload)
+        else:
+            upload.filename = filename
+            upload.content_text = content_text
+
+        self._db.commit()
+        self._db.refresh(upload)
+        log.db("Persisted raw upload content upload_id=%s", upload_id)
+        return upload
+
     def ingest_csv(self, upload_id: str, filename: str, raw_bytes: bytes) -> int:
-        if not raw_bytes:
-            raise EmptyCsvError("Uploaded file is empty")
-
         log.service("Parsing CSV upload_id=%s filename=%s", upload_id, filename)
-
-        try:
-            df = pd.read_csv(io.BytesIO(raw_bytes))
-        except Exception as exc:
-            raise CsvValidationError("Could not read CSV file", details=str(exc)) from exc
-
-        if df.empty:
-            raise EmptyCsvError("CSV has no data rows")
-
-        column_map = _build_column_map(list(df.columns))
         records: list[SensorLogRecord] = []
-
-        for _, row in df.iterrows():
+        parsed_rows = parse_sensor_log_csv(filename, raw_bytes)
+        for parsed in parsed_rows:
             records.append(
                 SensorLogRecord(
                     upload_id=upload_id,
                     source_filename=filename,
-                    timestamp=_parse_timestamp(row[column_map["timestamp"]]),
-                    temperature=_to_float(row[column_map["temperature"]]),
-                    pressure=_to_float(row[column_map["pressure"]]),
-                    vibration=_to_float(row[column_map["vibration"]]),
-                    rpm=_to_float(row[column_map["rpm"]]),
+                    timestamp=parsed["timestamp"],
+                    temperature=parsed["temperature"],
+                    pressure=parsed["pressure"],
+                    vibration=parsed["vibration"],
+                    rpm=parsed["rpm"],
                 )
             )
 
@@ -131,4 +196,11 @@ class IngestionService:
             .filter(SensorLogRecord.upload_id == upload_id)
             .order_by(SensorLogRecord.id)
             .all()
+        )
+
+    def get_uploaded_content(self, upload_id: str) -> UploadedFile | None:
+        return (
+            self._db.query(UploadedFile)
+            .filter(UploadedFile.upload_id == upload_id)
+            .one_or_none()
         )

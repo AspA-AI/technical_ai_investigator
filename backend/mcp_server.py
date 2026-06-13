@@ -1,6 +1,6 @@
 """Real MCP-protocol server exposing the investigation tools (Phase 7).
 
-This wraps the six deterministic/LLM tools behind the Model Context Protocol so
+This wraps the seven deterministic/LLM tools behind the Model Context Protocol so
 external agents (Claude Desktop, ChatGPT, Copilot, an internal engineering agent,
 ...) can discover and invoke them over the standard MCP transports (stdio / SSE /
 streamable-http).
@@ -37,6 +37,45 @@ mcp_server: FastMCP = FastMCP(
     ),
 )
 
+# Append these lines to your existing mcp_server.py file
+
+
+@mcp_server.tool(
+    name="publish_github_investigation_issue",
+    description=(
+        "Publishes a formal engineering investigation ticket and recommended action checklist "
+        "directly to the shared GitHub repository queue for engineering cross-collaboration."
+    ),
+)
+def publish_github_investigation_issue(
+    asset_id: str,
+    diagnostic_summary: str,
+    recommended_tasks: list[str],
+) -> str:
+    """MCP tool that maps an investigation result to an external GitHub Issue endpoint."""
+    result = invoke_mcp_tool(
+        "github_issue_publisher",
+        {
+            "asset_id": asset_id,
+            "diagnostic_summary": diagnostic_summary,
+            "recommended_tasks": recommended_tasks,
+        },
+    )
+
+    if result.get("status") == "published":
+        return (
+            f"🌐 [GITHUB PRODUCTION API SUCCESS]\n"
+            f"Successfully generated Live Issue #{result['issue_id']}!\n"
+            f"Trackable Web Link: {result['issue_url']}\n"
+            f"Status: Operational tracking initiated."
+        )
+    else:
+        return (
+            f"❌ [GITHUB PRODUCTION API FAILURE]\n"
+            f"Pipeline Status: {result.get('status')}\n"
+            f"Error Details: {result.get('detail')}"
+        )
+
 
 @mcp_server.tool(
     name="anomaly_detector",
@@ -60,7 +99,29 @@ def anomaly_detector(sensor_rows: list[dict[str, Any]]) -> dict[str, Any]:
 def historical_search(failure_summary: str, limit: int = 5) -> list[dict[str, Any]]:
     db = SessionLocal()
     try:
-        return invoke_mcp_tool("historical_search", failure_summary, params={"limit": limit}, db=db)
+        return invoke_mcp_tool(
+            "historical_search", failure_summary, params={"limit": limit}, db=db
+        )
+    finally:
+        db.close()
+
+
+@mcp_server.tool(
+    name="archived_issue_search",
+    description=(
+        "Search archived GitHub incident discussions only using PGVector "
+        "embedding similarity. Returns similarity-ranked human investigation matches."
+    ),
+)
+def archived_issue_search(summary_text: str, limit: int = 5) -> list[dict[str, Any]]:
+    db = SessionLocal()
+    try:
+        return invoke_mcp_tool(
+            "archived_issue_search",
+            summary_text,
+            params={"limit": limit},
+            db=db,
+        )
     finally:
         db.close()
 
@@ -76,7 +137,9 @@ def root_cause_analysis(
     anomalies: list[dict[str, Any]],
     incidents: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    return invoke_mcp_tool("root_cause_analysis", {"anomalies": anomalies, "incidents": incidents})
+    return invoke_mcp_tool(
+        "root_cause_analysis", {"anomalies": anomalies, "incidents": incidents}
+    )
 
 
 @mcp_server.tool(
@@ -137,6 +200,20 @@ def summary_generator(
     )
 
 
+@mcp_server.tool(
+    name="generate_technical_report",
+    description=(
+        "Generate and persist a formal technical markdown report from a completed "
+        "investigation, including NASA telemetry evidence and archived GitHub issue references."
+    ),
+)
+def generate_technical_report(investigation_id: int) -> dict[str, Any]:
+    return invoke_mcp_tool(
+        "generate_technical_report",
+        {"investigation_id": investigation_id},
+    )
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the investigation MCP server.")
     parser.add_argument(
@@ -146,7 +223,9 @@ def _parse_args() -> argparse.Namespace:
         help="MCP transport to serve (default: stdio).",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Host for HTTP transports.")
-    parser.add_argument("--port", type=int, default=8001, help="Port for HTTP transports.")
+    parser.add_argument(
+        "--port", type=int, default=8001, help="Port for HTTP transports."
+    )
     return parser.parse_args()
 
 

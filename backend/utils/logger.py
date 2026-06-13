@@ -34,6 +34,7 @@ class LogCategory(str, Enum):
 
     APP = "APP"
     API = "API"
+    PIPELINE = "PIPELINE"
     SERVICE = "SERVICE"
     AGENT = "AGENT"
     TOOL = "TOOL"
@@ -57,6 +58,7 @@ _LEVEL_COLORS = {
 _CATEGORY_COLORS = {
     LogCategory.APP: "\033[37m",  # white
     LogCategory.API: "\033[94m",  # bright blue
+    LogCategory.PIPELINE: "\033[97m\033[1m",  # bold white
     LogCategory.SERVICE: "\033[92m",  # bright green
     LogCategory.AGENT: "\033[95m",  # bright magenta
     LogCategory.TOOL: "\033[96m",  # bright cyan
@@ -183,6 +185,9 @@ class AppLogger:
 
     def http(self, msg: str, *args: Any, **kwargs: Any) -> None:
         self.log(logging.INFO, msg, *args, category=LogCategory.HTTP, **kwargs)
+
+    def pipeline(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self.log(logging.INFO, msg, *args, category=LogCategory.PIPELINE, **kwargs)
 
 
 def setup_logging(

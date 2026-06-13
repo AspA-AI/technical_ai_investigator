@@ -3,9 +3,6 @@ from __future__ import annotations
 import json
 
 from fastapi.testclient import TestClient
-from config.settings import settings
-import tempfile
-from pathlib import Path
 
 from app import app
 from services.chat_service import ChatService
@@ -40,11 +37,25 @@ class FakeQuery:
 
 
 class FakeDB:
-    def __init__(self, investigation: FakeInvestigationResult) -> None:
+    def __init__(self, investigation: FakeInvestigationResult, upload=None) -> None:
         self._investigation = investigation
+        self._upload = upload
 
     def query(self, model):
+        if model.__name__ == "UploadedFile":
+            return FakeUploadQuery(self._upload)
         return FakeQuery(self._investigation)
+
+
+class FakeUploadQuery:
+    def __init__(self, upload) -> None:
+        self._upload = upload
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def one_or_none(self):
+        return self._upload
 
 
 def test_chat_service_returns_llm_answer() -> None:
@@ -90,21 +101,27 @@ def test_chat_off_topic_gentle_redirect() -> None:
     assert llm_client.prompt == ""
 
 
-def test_chat_includes_uploaded_raw_in_prompt(tmp_path, monkeypatch) -> None:
+def test_chat_includes_uploaded_raw_in_prompt() -> None:
     state = {
         "summary": "Test summary with upload.",
     }
     upload_id = "upload_xyz"
 
-    # prepare fake raw dir and file
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
     test_csv = "timestamp,temperature\n2024-01-01T00:00:00Z,42\n"
-    (raw_dir / f"{upload_id}_sensor.csv").write_text(test_csv)
+    upload = type(
+        "Upload",
+        (),
+        {
+            "upload_id": upload_id,
+            "filename": "sensor.csv",
+            "content_text": test_csv,
+        },
+    )()
 
-    monkeypatch.setattr(settings, "RAW_DATA_DIR", str(raw_dir))
-
-    fake_db = FakeDB(FakeInvestigationResult(json.dumps(state), upload_id=upload_id))
+    fake_db = FakeDB(
+        FakeInvestigationResult(json.dumps(state), upload_id=upload_id),
+        upload=upload,
+    )
     llm_client = FakeLLMClient()
     service = ChatService(fake_db, llm_client=llm_client)
 

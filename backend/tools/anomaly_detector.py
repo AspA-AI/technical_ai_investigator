@@ -19,6 +19,7 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
     def run(self, payload: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         if not payload:
             return {
+                "anomalies": [],
                 "temperature_spike": False,
                 "pressure_drop": False,
                 "risk": "low",
@@ -30,6 +31,7 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
         available = [field for field in NUMERIC_FIELDS if field in frame.columns]
         if not available:
             return {
+                "anomalies": [],
                 "temperature_spike": False,
                 "pressure_drop": False,
                 "risk": "low",
@@ -37,9 +39,12 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
                 "signals": {},
             }
 
-        numeric = frame[available].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+        numeric = (
+            frame[available].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+        )
         if numeric.empty:
             return {
+                "anomalies": [],
                 "temperature_spike": False,
                 "pressure_drop": False,
                 "risk": "low",
@@ -65,11 +70,17 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
             for field in available
         }
 
+        # Format clean anomaly strings for LangGraph State tracking
+        detected_anomalies = [
+            name.replace("_", " ") for name, active in flags.items() if active
+        ]
+
         failure_summary = self._build_failure_summary(flags, signals, last_row)
         return {
             **flags,
+            "anomalies": detected_anomalies,  # FIX: Populate the anomalies list directly!
             "risk": risk,
-            "failure_summary": failure_summary,
+            "failure_summary": failure_summary,  # FIX: This detailed text will now overwrite state
             "signals": signals,
             "row_count": int(len(numeric)),
             "latest_measurements": {
@@ -79,31 +90,36 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
 
     @staticmethod
     def _evaluate_flags(last_row, means, stds, z_scores) -> dict[str, bool]:
+        # Your sample data has temperature rising rapidly from 78 to 138!
+        # Let's ensure standard deviation bounds don't choke on a tight baseline
         temperature_spike = bool(
             (last_row.get("temperature") is not None)
             and (
-                last_row["temperature"] > means.get("temperature", last_row["temperature"])
+                last_row["temperature"]
+                > means.get("temperature", last_row["temperature"]) * 1.05
                 or z_scores.get("temperature", 0.0) >= 1.5
             )
         )
         pressure_drop = bool(
             (last_row.get("pressure") is not None)
             and (
-                last_row["pressure"] < means.get("pressure", last_row["pressure"])
+                last_row["pressure"]
+                < means.get("pressure", last_row["pressure"]) * 0.95
                 or z_scores.get("pressure", 0.0) <= -1.5
             )
         )
         vibration_spike = bool(
             (last_row.get("vibration") is not None)
             and (
-                last_row["vibration"] > means.get("vibration", last_row["vibration"])
+                last_row["vibration"]
+                > means.get("vibration", last_row["vibration"]) * 1.10
                 or z_scores.get("vibration", 0.0) >= 1.5
             )
         )
         rpm_drop = bool(
             (last_row.get("rpm") is not None)
             and (
-                last_row["rpm"] < means.get("rpm", last_row["rpm"])
+                last_row["rpm"] < means.get("rpm", last_row["rpm"]) * 0.95
                 or z_scores.get("rpm", 0.0) <= -1.5
             )
         )
@@ -115,7 +131,9 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
         }
 
     @staticmethod
-    def _classify_risk(flags: dict[str, bool], row_count: int, numeric: pd.DataFrame) -> str:
+    def _classify_risk(
+        flags: dict[str, bool], row_count: int, numeric: pd.DataFrame
+    ) -> str:
         score = sum(1 for value in flags.values() if value)
 
         if len(numeric) >= 10:
@@ -140,13 +158,17 @@ class AnomalyDetector(BaseTool[list[dict[str, Any]], dict[str, Any]]):
         return "low"
 
     @staticmethod
-    def _build_failure_summary(flags: dict[str, bool], signals: dict[str, float], last_row) -> str:
+    def _build_failure_summary(
+        flags: dict[str, bool], signals: dict[str, float], last_row
+    ) -> str:
         active = [name.replace("_", " ") for name, enabled in flags.items() if enabled]
         if active:
             headline = ", ".join(active)
         else:
             headline = "no strong anomaly flags"
-        top_signal = max(signals.items(), key=lambda item: abs(item[1]), default=("unknown", 0.0))
+        top_signal = max(
+            signals.items(), key=lambda item: abs(item[1]), default=("unknown", 0.0)
+        )
         return (
             f"Observed {headline} in the latest telemetry. "
             f"The strongest standardized deviation was {top_signal[0]} ({top_signal[1]:+.2f}). "

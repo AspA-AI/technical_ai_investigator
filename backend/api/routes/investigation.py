@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_db
 from api.schemas.investigation import InvestigationRunResponse
-from services.errors import InvestigationNotFoundError
+from services.errors import InvestigationNotFoundError, UploadContentNotFoundError
 from services.investigation_service import InvestigationService
 
 router = APIRouter(prefix="/api/investigations", tags=["investigation"])
@@ -17,6 +17,8 @@ def run_investigation(upload_id: str, db: Session = Depends(get_db)) -> Investig
         result = InvestigationService(db).run_investigation(upload_id)
         return InvestigationRunResponse(**result)
     except InvestigationNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+    except UploadContentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
     except Exception as exc:
         raise HTTPException(

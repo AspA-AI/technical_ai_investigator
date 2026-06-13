@@ -1,7 +1,6 @@
 """Application settings loaded from environment variables."""
 
 from typing import List
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +16,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    HISTORICAL_MATCH_THRESHOLD: float = 0.6
 
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -25,6 +25,13 @@ class Settings(BaseSettings):
 
     UPLOAD_DIR: str = "datasets/uploads"
     RAW_DATA_DIR: str = "datasets/raw"
+    REPORT_OUTPUT_DIR: str = "docs/generated_reports"
+
+    # 🛠️ ADD THESE THREE LINES HERE SO PYDANTIC RECOGNIZES THEM:
+    GITHUB_TOKEN: str = ""
+    GITHUB_REPO_OWNER: str = ""
+    GITHUB_REPO_NAME: str = ""
+    GITHUB_WEBHOOK_SECRET: str = ""
 
     @property
     def allowed_origins_list(self) -> List[str]:

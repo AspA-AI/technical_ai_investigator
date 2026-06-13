@@ -38,7 +38,9 @@ class FakeInvestigationService:
 
 
 def test_run_investigation_route_returns_investigation_state(monkeypatch) -> None:
-    monkeypatch.setattr("api.routes.investigation.InvestigationService", FakeInvestigationService)
+    monkeypatch.setattr(
+        "api.routes.investigation.InvestigationService", FakeInvestigationService
+    )
 
     client = TestClient(app)
     response = client.post("/api/investigations/upload_123/run")
@@ -50,7 +52,9 @@ def test_run_investigation_route_returns_investigation_state(monkeypatch) -> Non
 
 
 def test_get_investigation_route_returns_saved_state(monkeypatch) -> None:
-    monkeypatch.setattr("api.routes.investigation.InvestigationService", FakeInvestigationService)
+    monkeypatch.setattr(
+        "api.routes.investigation.InvestigationService", FakeInvestigationService
+    )
 
     client = TestClient(app)
     response = client.get("/api/investigations/1")
@@ -66,9 +70,13 @@ def test_get_investigation_route_returns_404_when_missing(monkeypatch) -> None:
             self.db = db
 
         def get_investigation(self, investigation_id: int) -> dict:
-            raise InvestigationNotFoundError(f"Investigation run {investigation_id} was not found")
+            raise InvestigationNotFoundError(
+                f"Investigation run {investigation_id} was not found"
+            )
 
-    monkeypatch.setattr("api.routes.investigation.InvestigationService", MissingInvestigationService)
+    monkeypatch.setattr(
+        "api.routes.investigation.InvestigationService", MissingInvestigationService
+    )
 
     client = TestClient(app)
     response = client.get("/api/investigations/99")
