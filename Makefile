@@ -10,7 +10,7 @@ FRONTEND_PORT ?= 5173
 
 .PHONY: help setup env install install-backend install-frontend \
 	up up-d down down-v restart build rebuild logs logs-api logs-frontend logs-db ps \
-	dev dev-local dev-api dev-frontend mcp clean test-api
+	dev dev-local dev-api dev-frontend mcp clean test-api eval
 
 help:
 	@echo "Engineering Failure Investigation Copilot"
@@ -31,6 +31,7 @@ help:
 	@echo "Local development (optional):"
 	@echo "  make install   Python venv + npm install"
 	@echo "  make dev-local Run API + frontend on host (postgres via make up-d postgres)"
+	@echo "  make eval      Run retrieval + LLM evaluation suite"
 	@echo ""
 	@echo "URLs:"
 	@echo "  Frontend  http://localhost:$(FRONTEND_PORT)"
@@ -124,6 +125,9 @@ dev: up-d
 
 test-api:
 	@curl -sf "http://localhost:$(API_PORT)/health" && echo " API OK" || echo " API not reachable"
+
+eval: env install-backend
+	cd backend && PYTHONPATH=. $(CURDIR)/$(VENV_BIN)/python -m scripts.run_evaluation
 
 clean:
 	rm -rf frontend/dist frontend/node_modules

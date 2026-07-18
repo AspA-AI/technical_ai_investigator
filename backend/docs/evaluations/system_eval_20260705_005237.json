@@ -1,0 +1,234 @@
+{
+  "retrieval_cases": [
+    {
+      "name": "nasa_bearing_wear",
+      "source_type": "eval_nasa",
+      "expected_ids": [
+        910101
+      ],
+      "ranked_ids": [
+        910101,
+        910103,
+        910102
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.8259
+    },
+    {
+      "name": "nasa_compressor_degradation",
+      "source_type": "eval_nasa",
+      "expected_ids": [
+        910102
+      ],
+      "ranked_ids": [
+        910102,
+        910103,
+        910101
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.8008
+    },
+    {
+      "name": "nasa_fan_degradation",
+      "source_type": "eval_nasa",
+      "expected_ids": [
+        910103
+      ],
+      "ranked_ids": [
+        910103,
+        910101,
+        910102
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.7586
+    },
+    {
+      "name": "github_bearing_thread",
+      "source_type": "eval_github",
+      "expected_ids": [
+        920101
+      ],
+      "ranked_ids": [
+        920101,
+        920102,
+        920103
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.704
+    },
+    {
+      "name": "github_lubrication_thread",
+      "source_type": "eval_github",
+      "expected_ids": [
+        920102
+      ],
+      "ranked_ids": [
+        920102,
+        920101,
+        920103
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.7218
+    },
+    {
+      "name": "github_compressor_thread",
+      "source_type": "eval_github",
+      "expected_ids": [
+        920103
+      ],
+      "ranked_ids": [
+        920103,
+        920102,
+        920101
+      ],
+      "precision_at_1": 1.0,
+      "precision_at_3": 0.3333333333333333,
+      "recall_at_3": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr": 1.0,
+      "avg_top_similarity": 0.7824
+    }
+  ],
+  "summary_cases": [
+    {
+      "name": "bearing_wear_summary",
+      "candidate_type": "summary",
+      "text": "{\n  \"headline\": \"Bearing Wear Detected in Turbofan System\",\n  \"overview\": \"An investigation revealed severe vibration growth indicating potential bearing wear in the turbofan system.\",\n  \"anomalies\": [\n    \"severe vibration growth\",\n    \"stable pressure\",\n    \"minor temperature increase\"\n  ],\n  \"historical_matches\": [\n    {\n      \"incident_id\": 910101,\n      \"similarity\": 0.93,\n      \"failure\": \"NASA-style turbofan degradation trajectory with bearing wear\",\n      \"root_cause\": \"bearing wear\"\n    }\n  ],\n  \"root_causes\": [\n    {\n      \"cause\": \"bearing wear\",\n      \"confidence\": 90,\n      \"evidence\": [\n        \"vibration growth\"\n      ]\n    }\n  ],\n  \"recommendations\": [\n    \"Inspect bearing assembly\",\n    \"Replace worn bearing\",\n    \"Verify lubrication\"\n  ],\n  \"action_plan\": [\n    \"Schedule inspection of bearing assembly\",\n    \"Procure replacement bearings\",\n    \"Conduct lubrication verification\"\n  ],\n  \"summary_text\": \"An investigation revealed severe vibration growth indicating potential bearing wear in the turbofan system.\"\n}",
+      "rule_checks": {
+        "json_valid": true,
+        "required_key_coverage": 1.0,
+        "duplicate_phrase_ratio": 0.0,
+        "summary_length_words": 14
+      },
+      "judge_scores": {
+        "groundedness": 5.0,
+        "completeness": 5.0,
+        "clarity": 5.0,
+        "conciseness": 4.0,
+        "structure": 5.0,
+        "overall": 4.8,
+        "rationale": "5"
+      }
+    },
+    {
+      "name": "compressor_summary",
+      "candidate_type": "summary",
+      "text": "{\n  \"headline\": \"Investigation into Turbofan Anomalies\",\n  \"overview\": \"Anomalies detected in turbofan operation include temperature and vibration spikes, along with an rpm drop. Historical data suggests a similarity to previous compressor degradation incidents.\",\n  \"anomalies\": [\n    \"temperature spike\",\n    \"vibration spike\",\n    \"rpm drop\"\n  ],\n  \"historical_matches\": [\n    {\n      \"incident_id\": 910102,\n      \"similarity\": 0.91,\n      \"failure\": \"NASA-style turbofan compressor degradation trajectory\",\n      \"root_cause\": \"HPC degradation\"\n    }\n  ],\n  \"root_causes\": [\n    {\n      \"cause\": \"HPC degradation\",\n      \"confidence\": 88,\n      \"evidence\": [\n        \"rpm drop\"\n      ]\n    }\n  ],\n  \"recommendations\": [\n    \"Inspect high-pressure compressor blades and seals\",\n    \"Validate maintenance records\"\n  ],\n  \"action_plan\": [\n    \"Schedule inspection of HPC components\",\n    \"Review and update maintenance protocols\"\n  ],\n  \"summary_text\": \"Anomalies detected in turbofan operation include temperature and vibration spikes, along with an rpm drop. Historical data suggests a similarity to previous compressor degradation incidents.\"\n}",
+      "rule_checks": {
+        "json_valid": true,
+        "required_key_coverage": 1.0,
+        "duplicate_phrase_ratio": 0.0,
+        "summary_length_words": 25
+      },
+      "judge_scores": {
+        "groundedness": 5.0,
+        "completeness": 5.0,
+        "clarity": 5.0,
+        "conciseness": 4.0,
+        "structure": 5.0,
+        "overall": 4.8,
+        "rationale": "5"
+      }
+    }
+  ],
+  "report_cases": [
+    {
+      "name": "bearing_report",
+      "candidate_type": "report",
+      "text": "# Engineering Technical Report\n\n- Investigation ID: `710101`\n- Upload ID: `eval-bearing-001`\n- Status: `completed`\n\n## Executive Summary\nVibration growth with stable pressure and a modest temperature rise points toward bearing wear.\n\n## Anomaly Findings\n- severe vibration growth\n- stable pressure\n- minor temperature increase\n\n## Historical NASA Evidence\n- Incident `910101` (93% similarity): NASA-style turbofan degradation trajectory with bearing wear | Root cause: bearing wear\n\n## Archived GitHub Evidence\n- https://github.com/example/repo/issues/101 (89% similarity): Archived issue about bearing wear and repeated vibration alarms | Root cause: bearing wear\n\n## Root Cause and Recommendations\n- bearing wear (90% confidence)\n\n- Inspect bearing assembly\n- Replace worn bearing\n- Verify lubrication\n\n## Source Traceability\n- NASA telemetry evidence was used for the initial diagnostic stage.\n- Archived GitHub issue evidence was used as a second-stage institutional knowledge search.\n",
+      "rule_checks": {
+        "section_coverage": 1.0,
+        "duplicate_phrase_ratio": 0.040983606557377046,
+        "has_issue_url": true,
+        "markdown_length_words": 137
+      },
+      "judge_scores": {
+        "groundedness": 5.0,
+        "completeness": 5.0,
+        "clarity": 5.0,
+        "conciseness": 5.0,
+        "structure": 5.0,
+        "overall": 5.0,
+        "rationale": "5"
+      }
+    },
+    {
+      "name": "compressor_report",
+      "candidate_type": "report",
+      "text": "# Engineering Technical Report\n\n- Investigation ID: `710102`\n- Upload ID: `eval-compressor-001`\n- Status: `completed`\n\n## Executive Summary\nTemperature rise, vibration growth, and RPM instability are consistent with compressor degradation.\n\n## Anomaly Findings\n- temperature spike\n- vibration spike\n- rpm drop\n\n## Historical NASA Evidence\n- Incident `910102` (91% similarity): NASA-style turbofan compressor degradation trajectory | Root cause: HPC degradation\n\n## Archived GitHub Evidence\n- https://github.com/example/repo/issues/103 (88% similarity): Archived issue about compressor seal degradation | Root cause: compressor seal degradation\n\n## Root Cause and Recommendations\n- HPC degradation (88% confidence)\n\n- Inspect high-pressure compressor blades and seals\n- Validate maintenance records\n\n## Source Traceability\n- NASA telemetry evidence was used for the initial diagnostic stage.\n- Archived GitHub issue evidence was used as a second-stage institutional knowledge search.\n",
+      "rule_checks": {
+        "section_coverage": 1.0,
+        "duplicate_phrase_ratio": 0.034482758620689655,
+        "has_issue_url": true,
+        "markdown_length_words": 129
+      },
+      "judge_scores": {
+        "groundedness": 5.0,
+        "completeness": 5.0,
+        "clarity": 5.0,
+        "conciseness": 5.0,
+        "structure": 5.0,
+        "overall": 5.0,
+        "rationale": "5"
+      }
+    }
+  ],
+  "aggregates": {
+    "nasa_hit_at_1": 1.0,
+    "nasa_hit_at_3": 1.0,
+    "nasa_precision_at_3": 0.3333333333333333,
+    "nasa_recall_at_3": 1.0,
+    "nasa_mrr": 1.0,
+    "nasa_avg_top_similarity": 0.7951,
+    "github_hit_at_1": 1.0,
+    "github_hit_at_3": 1.0,
+    "github_precision_at_3": 0.3333333333333333,
+    "github_recall_at_3": 1.0,
+    "github_mrr": 1.0,
+    "github_avg_top_similarity": 0.7360666666666666,
+    "summary_groundedness": 5.0,
+    "summary_completeness": 5.0,
+    "summary_clarity": 5.0,
+    "summary_conciseness": 4.0,
+    "summary_structure": 5.0,
+    "summary_duplicate_ratio": 0.0,
+    "report_groundedness": 5.0,
+    "report_completeness": 5.0,
+    "report_clarity": 5.0,
+    "report_conciseness": 5.0,
+    "report_structure": 5.0,
+    "report_duplicate_ratio": 0.037733182589033354,
+    "report_section_coverage": 1.0,
+    "retrieval_score_5": 1.0,
+    "llm_score_5": 4.9,
+    "overall_score_5": 2.95,
+    "overall_score_100": 59.0
+  },
+  "generated_at": "2026-07-05T00:52:37.727729+00:00"
+}

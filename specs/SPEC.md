@@ -4,7 +4,7 @@
 
 ### 1.1 Purpose
 
-Build an **Engineering Failure Investigation Copilot** that ingests sensor logs, detects anomalies with deterministic tools, searches historical incidents via vector similarity, analyzes root causes with LLM assistance, plans investigations, supports counterfactual what-if analysis, and presents results through a frontend dashboard—including an engineering chat copilot and PDF report generation.
+Build an **Engineering Failure Investigation Copilot** that ingests sensor logs, detects anomalies with deterministic tools, searches historical incidents via vector similarity, analyzes root causes with LLM assistance, plans investigations, supports counterfactual what-if analysis, archives closed GitHub issue investigations, and presents results through a frontend dashboard—including an engineering chat copilot and structured report generation.
 
 ### 1.2 Key Features
 
@@ -18,19 +18,29 @@ Build an **Engineering Failure Investigation Copilot** that ingests sensor logs,
 - Process: create text summary → generate embedding → store in PGVector
 - MVP source data: NASA C-MAPSS Turbofan Engine Degradation Dataset, and optionally the AI4I Predictive Maintenance Dataset
 - The raw dataset is transformed into incident-style records before embedding and retrieval
+- Archived GitHub issue investigations are stored in the same PostgreSQL + PGVector layer with `source_type="github"`
+- Retrieval is two-stage:
+  1. NASA / standards-based search during initial diagnosis
+  2. Archived GitHub issue search after the first summary is generated to surface institutional memory and human discussion history
 
-**Deterministic Tools (5 + Summary):**
+**Deterministic Tools (core analysis + archived evidence + reporting):**
 1. **AnomalyDetector** — Isolation Forest, Z-Score, Threshold Detection on sensor log
-2. **HistoricalIncidentSearch** — embedding search via PGVector similarity
+2. **HistoricalIncidentSearch** — NASA / standards search via PGVector similarity
 3. **RootCauseAnalyzer** — LLM analysis using current anomalies + historical incidents
 4. **InvestigationPlanner** — produces investigation steps from root causes
 5. **CounterfactualAnalysis** — what-if input (e.g. temperature change) → risk reduction estimate
-6. **Summary Generator** — final investigation summary (LangGraph terminal node)
+6. **Summary Generator** — final investigation summary (LangGraph node)
+7. **ArchivedIssueSearch** — PGVector similarity over archived GitHub incidents only
+8. **GitHubIssuePublisher** — publishes investigation threads to GitHub and preserves issue URLs
+9. **TechnicalReportGenerator** — creates the formal technical report and exportable artifacts
 
 **LangGraph Agent:**
 - Coordinates all tools in a fixed pipeline after user uploads sensor log
-- Shared state: `anomalies`, `incidents`, `root_causes`, `recommendations`, `summary`
+- Shared state: `anomalies`, `incidents`, `github_matches`, `root_causes`, `recommendations`, `summary`, `risk_level`
 - Each node updates state; node output becomes next node input
+- The graph now branches after the NASA historical search:
+  - if a match is found, it proceeds through root-cause analysis and planning
+  - if not, it still produces a summary and continues into archived GitHub issue search, publishing, persistence, and technical report generation
 
 **MCP Server (after tools work):**
 - Expose every tool as MCP tool for consumption by Claude, ChatGPT, Copilot, Internal Engineering Agent
@@ -48,11 +58,13 @@ Build an **Engineering Failure Investigation Copilot** that ingests sensor logs,
 6. Investigation whiteboard (React Flow reasoning graph)
 
 **Report Generation:**
-- Collect anomalies, incidents, root causes, recommendations → generate PDF Engineering Investigation Report
+- Generate a markdown-first technical report from the finalized investigation
+- Export to PDF, PPTX, and DOCX from the same investigation state
+- Preview report content in the frontend before download
 
 **Engineering Chat:**
 - User questions: what caused failure, which incident is most similar, what action to take
-- LangGraph retrieves current investigation state, historical incidents, relevant metrics; GPT generates answer
+- LangGraph retrieves current investigation state, historical incidents, archived GitHub matches, relevant metrics; GPT generates answer
 
 **What-If Analysis:**
 - User asks e.g. “What if vibration decreases by 20%?”
@@ -82,13 +94,13 @@ Build an **Engineering Failure Investigation Copilot** that ingests sensor logs,
 |------|-------|--------------|
 | 1–2 | Docker, structure, logging | ✅ Done |
 | 3 | CSV upload → Postgres | ✅ Now |
-| 4 | Historical incidents + PGVector | Next |
-| 5 | 5 deterministic tools (+ summary) | Planned |
-| 6 | LangGraph pipeline (`upload_id` → investigation) | Planned |
-| 7 | MCP exposure | Planned |
-| 8 | GPT boundaries wired into analyzers | Planned |
-| 9 | Dashboard fed with real API data | Planned |
-| 10–12 | PDF report, engineering chat, what-if | Planned |
+| 4 | Historical incidents + PGVector | In progress |
+| 5 | Deterministic tools (+ summary, archived search, publishing, report generation) | In progress |
+| 6 | LangGraph pipeline (`upload_id` → investigation) | In progress |
+| 7 | MCP exposure | In progress |
+| 8 | GPT boundaries wired into analyzers | In progress |
+| 9 | Dashboard fed with real API data | In progress |
+| 10–12 | PDF report, engineering chat, what-if | In progress |
 
 **AVL Interview Demonstration Flow** (end-to-end):
 1. Upload sensor log
@@ -96,15 +108,17 @@ Build an **Engineering Failure Investigation Copilot** that ingests sensor logs,
 3. Search historical incidents
 4. Generate root causes
 5. Produce investigation plan
-6. Visualize failure timeline
-7. Show reasoning graph
-8. Run what-if analysis
-9. Generate final report
-10. Ask follow-up questions through Engineering Copilot
+6. Generate the first summary
+7. Search archived GitHub incidents for similar human investigations
+8. Publish or archive the closed issue context
+9. Visualize failure timeline and telemetry
+10. Run what-if analysis
+11. Generate final report and downloads
+12. Ask follow-up questions through Engineering Copilot
 
 ### 1.5 Implementation Status
 
-**Not yet implemented** — repository initialized; specification derived from Technical Implementation Guide.
+**Active implementation** — the repository now includes the core ingestion, historical search, archived GitHub issue archival, LangGraph routing, MCP registration, and report generation flows described in this document.
 
 ## 2. System Architecture
 
@@ -128,8 +142,10 @@ Build an **Engineering Failure Investigation Copilot** that ingests sensor logs,
 │  └──────────────────────────────────────────────────────┘  │
 │                                                              │
 │  backend/tools/     — AnomalyDetector, HistoricalSearch,    │
-│                       RootCauseAnalyzer, InvestigationPlanner,│
-│                       CounterfactualAnalysis, Summary       │
+│                       ArchivedIssueSearch, RootCauseAnalyzer,│
+│                       InvestigationPlanner, CounterfactualAnalysis,│
+│                       SummaryGenerator, GitHubIssuePublisher,│
+│                       TechnicalReportGenerator              │
 │  backend/agents/    — LangGraph graph definition              │
 │  backend/services/  — ingestion, report, chat               │
 │  backend/vectorstore/ — PGVector operations                 │
@@ -287,6 +303,8 @@ The pipeline is:
 - Embedding search
 - PGVector similarity
 
+**Scope:** NASA / standards-derived incident records only
+
 **Output:**
 
 ```json
@@ -351,7 +369,48 @@ The pipeline is:
 
 ### 5.6 Summary Generator (LangGraph node)
 
-Terminal node in LangGraph pipeline; produces investigation `summary` for state (see §6).
+Produces investigation `summary` for state (see §6). In the current flow, it is followed by archived GitHub issue retrieval so that the final investigation can incorporate institutional memory.
+
+### 5.7 Tool 6 — ArchivedIssueSearch
+
+**Input:** Failure summary or investigation summary
+
+**Process:**
+- Embedding search
+- PGVector similarity
+- Filters to `source_type="github"`
+
+**Output:**
+
+```json
+[
+  {
+    "incident_id": 214,
+    "similarity": 0.87,
+    "issue_url": "https://github.com/org/repo/issues/214"
+  }
+]
+```
+
+### 5.8 Tool 7 — GitHubIssuePublisher
+
+**Input:** Finalized investigation context
+
+**Process:**
+- Publishes or updates the investigation thread in GitHub
+- Stores the issue URL and human discussion context for later archival
+
+**Output:** GitHub issue metadata and URL
+
+### 5.9 Tool 8 — TechnicalReportGenerator
+
+**Input:** Final investigation state
+
+**Process:**
+- Builds a formal markdown report from the finalized investigation
+- Exports report artifacts for PDF / PPTX / DOCX use cases
+
+**Output:** Structured technical report content and artifact metadata
 
 ## 6. LangGraph Agent (Phase 6)
 
@@ -359,18 +418,28 @@ Terminal node in LangGraph pipeline; produces investigation `summary` for state 
 
 Coordinate all tools. User uploads sensor log; LangGraph executes:
 
+The historical search is used as a gate:
+- if a strong NASA / standards match is found, the graph continues into root-cause analysis and investigation planning
+- if no strong match is found, the graph still generates a summary and then continues to archived GitHub issue retrieval, publishing, persistence, and technical report generation
+
 ```
 START
   ↓
 Anomaly Detector
   ↓
 Historical Search
-  ↓
-Root Cause Analyzer
-  ↓
-Investigation Planner
-  ↓
+  ├─ matched → Root Cause Analyzer → Investigation Planner → Summary Generator
+  └─ unmatched → Summary Generator
+
 Summary Generator
+  ↓
+Archived Issue Search
+  ↓
+GitHub Issue Publisher
+  ↓
+Investigation Persistence
+  ↓
+Technical Report Generator
   ↓
 END
 ```
@@ -381,9 +450,11 @@ END
 {
   "anomalies": [],
   "incidents": [],
+  "github_matches": [],
   "root_causes": [],
   "recommendations": [],
-  "summary": ""
+  "summary": "",
+  "risk_level": "unknown"
 }
 ```
 
@@ -398,8 +469,11 @@ Each node updates state. Node output becomes next node input.
 | Root Cause Analyzer | RootCauseAnalyzer |
 | Investigation Planner | InvestigationPlanner |
 | Summary Generator | Summary Generator |
+| Archived Issue Search | ArchivedIssueSearch |
+| GitHub Issue Publisher | GitHubIssuePublisher |
+| Technical Report Generator | TechnicalReportGenerator |
 
-(CounterfactualAnalysis is used in What-If flow — Phase 12 — not in the main linear pipeline above.)
+(CounterfactualAnalysis is used in What-If flow — Phase 12 — not in the main pipeline above.)
 
 ## 7. MCP Server (Phase 7)
 
@@ -408,10 +482,13 @@ After tools are working, expose every tool as MCP tool.
 **MCP Tool List:**
 - `anomaly_detector`
 - `historical_search`
+- `archived_issue_search`
 - `root_cause_analysis`
 - `investigation_planner`
 - `counterfactual_analysis`
 - `summary_generator`
+- `github_issue_publisher`
+- `generate_technical_report`
 
 Future LLMs can consume these tools (Claude, ChatGPT, Copilot, Internal Engineering Agent).
 
@@ -423,6 +500,7 @@ Future LLMs can consume these tools (Claude, ChatGPT, Copilot, Internal Engineer
 - Investigation summary
 - Engineering chat
 - Recommendation generation
+- Formal technical report synthesis when generating markdown reports
 
 ### 8.2 GPT Must NEVER Perform
 
@@ -445,6 +523,8 @@ Upload interface for CSV sensor logs.
 - Anomaly count
 - Historical match count
 - Root cause ranking
+- Archived GitHub match count
+- Investigation summary card
 
 ### 9.3 Page 3 — Engineering Timeline
 
@@ -490,15 +570,23 @@ Incident #31
 Recommended Action
 ```
 
+**Current UI behavior notes:**
+- Investigation details are displayed in a collapsible side panel when a new investigation is ready
+- The report preview is shown in a scrollable modal
+- The report UI supports PDF, PPTX, and markdown downloads
+
 ## 10. Report Generation (Phase 10)
 
 **Endpoint:** `/api/report` (FastAPI)
 
 **Process:**
-1. Collect: anomalies, incidents, root causes, recommendations
-2. Generate PDF
+1. Collect: anomalies, incidents, GitHub matches, root causes, recommendations
+2. Generate markdown technical report
+3. Export PDF, PPTX, or DOCX as requested
 
-**Output:** Engineering Investigation Report
+**Preview endpoint:** `GET /api/report/{investigation_id}/preview`
+
+**Output:** Engineering Investigation Report artifacts and preview markdown
 
 ## 11. Engineering Chat (Phase 11)
 
@@ -508,7 +596,7 @@ Recommended Action
 - What action should be taken?
 
 **Process:**
-1. LangGraph retrieves: current investigation state, historical incidents, relevant metrics
+1. LangGraph retrieves: current investigation state, historical incidents, archived GitHub matches, relevant metrics
 2. GPT generates answer
 
 ## 12. What-If Analysis (Phase 12)
@@ -531,7 +619,10 @@ Recommended Action
 | Method | Endpoint | Phase | Purpose |
 |--------|----------|-------|---------|
 | POST | `/api/upload` | 3 | Upload and ingest CSV sensor logs |
-| — | `/api/report` | 10 | Generate Engineering Investigation Report (PDF) |
+| POST | `/api/report` | 10 | Generate Engineering Investigation Report (PDF/PPTX/MD/DOCX) |
+| GET | `/api/report/{investigation_id}/preview` | 10 | Preview markdown technical report |
+| POST | `/api/github/webhooks/issues` | 7 | Receive GitHub issue webhook events for archival |
+| POST | `/api/github/poll/closed-issues` | 7 | Fallback poller for closed GitHub issues |
 
 (See [API_CONTRACTS.md](./API_CONTRACTS.md) for request/response detail.)
 
@@ -542,14 +633,16 @@ Recommended Action
 3. Search historical incidents
 4. Generate root causes
 5. Produce investigation plan
-6. Visualize failure timeline
-7. Show reasoning graph
-8. Run what-if analysis
-9. Generate final report
-10. Ask follow-up questions through Engineering Copilot
+6. Generate the first summary
+7. Search archived GitHub incidents
+8. Publish or archive the closed issue context
+9. Visualize failure timeline and telemetry
+10. Run what-if analysis
+11. Generate final report and downloads
+12. Ask follow-up questions through Engineering Copilot
 
 ---
 
 **Document Version**: 1.0  
 **Last Updated**: 2026-06-01  
-**Status**: Ready for implementation (content from Technical Implementation Guide only)
+**Status**: Living implementation reference

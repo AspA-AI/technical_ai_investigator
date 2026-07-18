@@ -377,11 +377,11 @@ export function DashboardPage() {
                 type="button"
                 onClick={closePreviewModal}
                 className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
-              >
-                Close
-              </button>
+                >
+                  Close
+                </button>
             </div>
-            <div className="flex-1 overflow-hidden p-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5">
               {reportPreviewLoading && !reportPreview ? (
                 <div className="flex h-full items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))]">
                   <div className="flex items-center gap-3 text-sm text-[hsl(var(--muted-foreground))]">
@@ -390,7 +390,7 @@ export function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <pre className="h-full overflow-auto whitespace-pre-wrap rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-xs leading-relaxed text-[hsl(var(--foreground))]">
+                <pre className="min-h-full whitespace-pre-wrap rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-xs leading-relaxed text-[hsl(var(--foreground))]">
                   {reportPreview || "No preview content available."}
                 </pre>
               )}
@@ -785,3 +785,5 @@ export function DashboardPage() {
     </div>
   );
 }
+
+

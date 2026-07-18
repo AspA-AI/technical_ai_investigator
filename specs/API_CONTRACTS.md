@@ -53,11 +53,41 @@ API endpoints defined in the Technical Implementation Guide.
 1. Collect:
    - Anomalies
    - Incidents
+   - GitHub matches
    - Root causes
    - Recommendations
-2. Generate PDF
+2. Generate markdown technical report
+3. Export as PDF, PPTX, DOCX, or raw markdown depending on request format
 
-**Output**: Engineering Investigation Report (PDF)
+**Formats supported by the current backend**:
+- `pdf`
+- `pptx`
+- `md`
+- `docx`
+
+### 2.2 Preview Technical Report
+
+**Endpoint**: `GET /api/report/{investigation_id}/preview`
+
+**Purpose**:
+- Returns the markdown preview used by the report modal in the frontend
+
+### 2.3 GitHub Issue Archival Webhook
+
+**Endpoint**: `POST /api/github/webhooks/issues`
+
+**Purpose**:
+- Receives GitHub `issues` webhook payloads
+- Archives closed issues into PostgreSQL + PGVector
+
+### 2.4 GitHub Closed-Issue Polling Fallback
+
+**Endpoint**: `POST /api/github/poll/closed-issues`
+
+**Purpose**:
+- Fallback path for scanning closed issues when webhook delivery is unavailable
+
+**Output**: Engineering Investigation Report artifacts and preview markdown
 
 ---
 
@@ -188,4 +218,4 @@ The guide defines behavior only (no HTTP path specified).
 
 **Document Version**: 1.0  
 **Last Updated**: 2026-06-01  
-**Status**: Ready for implementation (content from Technical Implementation Guide only)
+**Status**: Living implementation reference

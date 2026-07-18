@@ -93,6 +93,10 @@ backend/datasets/
 
 **Goal**: Store historical incidents with embeddings in PGVector.
 
+**Scope**:
+- NASA / standards-derived incidents for initial diagnosis
+- Archived GitHub issue incidents for institutional memory and stage-2 retrieval
+
 **Example incident**:
 
 ```json
@@ -108,6 +112,7 @@ backend/datasets/
 1. Create text summary
 2. Generate embedding (OpenAI Embeddings)
 3. Store embedding in PGVector
+4. Keep `source_type` metadata so NASA and GitHub records can be searched separately
 
 **Tools**: OpenAI Embeddings, PostgreSQL, PGVector
 
@@ -116,9 +121,11 @@ backend/datasets/
 - [ ] Implement text summary creation
 - [ ] Generate embeddings and store in PGVector
 - [ ] Seed or load historical incidents (e.g. via `backend/datasets/`)
+- [ ] Add GitHub-archived incident ingestion path
 
 **Acceptance Criteria**:
 - Incidents can be stored and retrieved for similarity search
+- NASA and GitHub records can be separated by `source_type`
 - Embedding pipeline uses OpenAI Embeddings + PGVector
 
 **Files to Create/Modify**:
@@ -130,7 +137,7 @@ backend/datasets/
 
 ### Phase 5: Tool Implementation
 
-**Goal**: Implement five deterministic tools (+ summary generator used in Phase 6).
+**Goal**: Implement the deterministic tools used by the investigation pipeline, including summary generation and archived GitHub retrieval.
 
 #### 5.1 AnomalyDetector
 
@@ -151,6 +158,17 @@ backend/datasets/
 **Tasks**:
 - [ ] Implement search against PGVector
 - [ ] Return similarity-ranked incidents
+
+#### 5.2a ArchivedIssueSearch
+
+**Input**: Failure summary or investigation summary  
+**Process**: Embedding search, PGVector similarity  
+**Scope**: Archived GitHub incidents only (`source_type="github"`)  
+**Output**: Similarity-ranked archived issues with issue URLs when available
+
+**Tasks**:
+- [ ] Implement GitHub-only search against PGVector
+- [ ] Return similarity-ranked archived incidents
 
 #### 5.3 RootCauseAnalyzer
 
@@ -178,6 +196,30 @@ backend/datasets/
 **Tasks**:
 - [ ] Implement counterfactual tool (used in Phase 12)
 
+#### 5.6 Summary Generator
+
+**Input**: Investigation state  
+**Output**: Final summary text and structured summary payload
+
+**Tasks**:
+- [ ] Implement summary generation from investigation state
+
+#### 5.7 GitHubIssuePublisher
+
+**Input**: Final investigation state or collaboration draft  
+**Output**: GitHub issue metadata / issue URL
+
+**Tasks**:
+- [ ] Implement GitHub issue publishing and update flow
+
+#### 5.8 TechnicalReportGenerator
+
+**Input**: Final investigation state  
+**Output**: Markdown report and exportable report metadata
+
+**Tasks**:
+- [ ] Implement technical report synthesis for markdown, PDF, PPTX, and DOCX export paths
+
 **Acceptance Criteria**:
 - Each tool produces output matching guide schemas
 - Numerical/anomaly/vector work remains in deterministic tools (not GPT)
@@ -185,9 +227,12 @@ backend/datasets/
 **Files to Create**:
 - `backend/tools/anomaly_detector.py` (or equivalent)
 - `backend/tools/historical_incident_search.py`
+- `backend/tools/archived_issue_search.py`
 - `backend/tools/root_cause_analyzer.py`
 - `backend/tools/investigation_planner.py`
 - `backend/tools/counterfactual_analysis.py`
+- `backend/tools/github_issue_publisher.py`
+- `backend/tools/technical_report_generator.py`
 
 ---
 
@@ -198,8 +243,10 @@ backend/datasets/
 **Pipeline**:
 
 ```
-START → Anomaly Detector → Historical Search → Root Cause Analyzer
-      → Investigation Planner → Summary Generator → END
+START → Anomaly Detector → Historical Search
+      → Root Cause Analyzer → Investigation Planner → Summary Generator
+      → Archived Issue Search → GitHub Issue Publisher
+      → Investigation Persistence → Technical Report Generator → END
 ```
 
 **State**:
@@ -208,9 +255,11 @@ START → Anomaly Detector → Historical Search → Root Cause Analyzer
 {
   "anomalies": [],
   "incidents": [],
+  "github_matches": [],
   "root_causes": [],
   "recommendations": [],
-  "summary": ""
+  "summary": "",
+  "risk_level": "unknown"
 }
 ```
 
@@ -219,10 +268,12 @@ START → Anomaly Detector → Historical Search → Root Cause Analyzer
 - [ ] Implement nodes (one per tool + summary generator)
 - [ ] Wire edges in pipeline order
 - [ ] Each node updates state; output feeds next node
+- [ ] Add stage-2 archived GitHub search after summary generation
+- [ ] Add GitHub publish/persist/report nodes after the investigation summary
 
 **Acceptance Criteria**:
 - Upload triggers full pipeline
-- Final state populated: anomalies, incidents, root_causes, recommendations, summary
+- Final state populated: anomalies, incidents, github_matches, root_causes, recommendations, summary, risk_level
 
 **Files to Create**:
 - `backend/agents/` — LangGraph graph definition
@@ -236,17 +287,20 @@ START → Anomaly Detector → Historical Search → Root Cause Analyzer
 **MCP tool list**:
 - `anomaly_detector`
 - `historical_search`
+- `archived_issue_search`
 - `root_cause_analysis`
 - `investigation_planner`
 - `counterfactual_analysis`
 - `summary_generator`
+- `github_issue_publisher`
+- `generate_technical_report`
 
 **Tasks**:
 - [ ] MCP server wrapping each backend tool
 - [ ] Verify external consumers can invoke tools (Claude, ChatGPT, Copilot, Internal Engineering Agent — per guide)
 
 **Acceptance Criteria**:
-- All six tools exposed with names matching guide
+- All registered tools exposed with names matching backend registry
 
 ---
 
@@ -319,17 +373,21 @@ Failure → Temperature Spike → Cooling Degradation → Incident #31 → Recom
 **Endpoint**: `/api/report`
 
 **Process**:
-1. Collect: anomalies, incidents, root causes, recommendations
-2. Generate PDF
+1. Collect: anomalies, incidents, GitHub matches, root causes, recommendations
+2. Generate markdown technical report
+3. Export PDF, PPTX, or DOCX as requested
+
+**Preview endpoint**: `/api/report/{investigation_id}/preview`
 
 **Tasks**:
 - [ ] Implement `/api/report` in FastAPI
+- [ ] Implement `/api/report/{investigation_id}/preview`
 - [ ] Aggregate investigation state
-- [ ] PDF generation
+- [ ] Markdown synthesis and export generation
 
 **Acceptance Criteria**:
-- Report includes all four collected artifact types
-- Output is Engineering Investigation Report (PDF)
+- Report includes all collected artifact types, including GitHub matches
+- Output is Engineering Investigation Report in PDF / PPTX / DOCX / markdown form
 
 **Files to Create/Modify**:
 - `backend/api/` — report route
@@ -347,7 +405,7 @@ Failure → Temperature Spike → Cooling Degradation → Incident #31 → Recom
 - What action should be taken?
 
 **Process**:
-1. LangGraph retrieves: current investigation state, historical incidents, relevant metrics
+1. LangGraph retrieves: current investigation state, historical incidents, archived GitHub matches, relevant metrics
 2. GPT generates answer
 
 **Tasks**:
@@ -395,11 +453,14 @@ Use this checklist for end-to-end demo validation:
 - [ ] 3. Search historical incidents
 - [ ] 4. Generate root causes
 - [ ] 5. Produce investigation plan
-- [ ] 6. Visualize failure timeline
-- [ ] 7. Show reasoning graph
-- [ ] 8. Run what-if analysis
-- [ ] 9. Generate final report
-- [ ] 10. Ask follow-up questions through Engineering Copilot
+- [ ] 6. Generate first summary
+- [ ] 7. Search archived GitHub incidents
+- [ ] 8. Publish/archive closed issue context
+- [ ] 9. Visualize failure timeline
+- [ ] 10. Show reasoning graph
+- [ ] 11. Run what-if analysis
+- [ ] 12. Generate final report
+- [ ] 13. Ask follow-up questions through Engineering Copilot
 
 ---
 
@@ -410,9 +471,9 @@ technical_investigation_copilot/
 ├── frontend/
 │   └── src/                    # Pages 1–6, chat, what-if
 ├── backend/
-│   ├── api/                    # /api/upload, /api/report
+│   ├── api/                    # /api/upload, /api/report, /api/github/webhooks/issues
 │   ├── agents/                 # LangGraph graph
-│   ├── tools/                  # 5 tools + summary
+│   ├── tools/                  # deterministic tools + archived search + report
 │   ├── models/
 │   ├── services/               # ingestion, report, chat
 │   ├── vectorstore/            # PGVector
@@ -451,15 +512,15 @@ Phase 1 (Setup)
 
 - CSV upload → PostgreSQL ingestion with `status` / `records` response
 - Historical incidents searchable via PGVector similarity
-- All five tools + summary generator produce guide-defined outputs
-- LangGraph pipeline runs: Anomaly → Historical → Root Cause → Planner → Summary
-- MCP exposes six named tools
+- All deterministic tools produce guide-defined outputs
+- LangGraph pipeline runs: Anomaly → Historical → Root Cause → Planner → Summary → Archived GitHub → Publisher → Persistence → Report
+- MCP exposes the registered tool set
 - GPT never performs numerical calculation, anomaly detection, or vector search
-- Six frontend pages + report PDF + engineering chat + what-if before/after risk
+- Six frontend pages + report preview/downloads + engineering chat + what-if before/after risk
 - AVL demonstration flow completable end-to-end
 
 ---
 
 **Document Version**: 1.0  
 **Last Updated**: 2026-06-01  
-**Status**: Ready for implementation (content from Technical Implementation Guide only)
+**Status**: Living implementation reference

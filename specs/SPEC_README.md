@@ -16,12 +16,13 @@ This directory contains the specification for the Engineering Failure Investigat
 - High-level architecture
 - Technology stack
 - Project structure
-- Tool specifications (5 tools + summary generator)
+- Tool specifications (core tools, archived GitHub retrieval, and summary/report generation)
 - LangGraph agent workflow and state
+- Archived GitHub issue search and webhook archival flow
 - Data models (incidents, investigation state)
 - MCP server exposure
 - OpenAI integration boundaries
-- Frontend dashboard pages
+- Frontend dashboard pages, side drawer, telemetry snapshot, preview modal, and downloads
 - API endpoints summary
 - AVL interview demonstration flow
 
@@ -75,7 +76,7 @@ This directory contains the specification for the Engineering Failure Investigat
 ### For Frontend Developers
 
 1. Read [SPEC.md](./SPEC.md) §9 (Frontend Dashboard)
-2. Use [API_CONTRACTS.md](./API_CONTRACTS.md) for upload and report integration
+2. Use [API_CONTRACTS.md](./API_CONTRACTS.md) for upload, webhook, and report integration
 3. Implement pages 1–6 as defined in the guide
 
 ### For QA / Demonstration (AVL Interview)
@@ -100,7 +101,7 @@ This directory contains the specification for the Engineering Failure Investigat
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │        LangGraph Investigation Agent                  │  │
 │  │  Anomaly → Historical → Root Cause → Planner →       │  │
-│  │  Summary                                               │  │
+│  │  Summary → Archived GitHub → Publisher → Report       │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                              │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
@@ -151,12 +152,12 @@ This directory contains the specification for the Engineering Failure Investigat
 
 | Document | Version | Status | Source |
 |----------|---------|--------|--------|
-| SPEC.md | 1.0 | Ready for implementation | Technical Implementation Guide |
-| API_CONTRACTS.md | 1.0 | Ready for implementation | Technical Implementation Guide |
-| IMPLEMENTATION_PLAN.md | 1.0 | Ready for implementation | Technical Implementation Guide |
+| SPEC.md | 1.0 | Living reference | Technical Implementation Guide + implemented backend |
+| API_CONTRACTS.md | 1.0 | Living reference | Technical Implementation Guide + implemented backend |
+| IMPLEMENTATION_PLAN.md | 1.0 | Living reference | Technical Implementation Guide + implemented backend |
 
 ---
 
 **Specification Version**: 1.0  
 **Created**: 2026-06-01  
-**Status**: Ready for Implementation
+**Status**: Living implementation reference
